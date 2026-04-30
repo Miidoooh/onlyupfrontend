@@ -51,7 +51,7 @@ contract BountyLaunchToken {
         symbol = tokenSymbol;
         owner = initialOwner;
         totalSupply = LaunchConfig.DEFAULT_SUPPLY;
-        maxTxAmount = (totalSupply * LaunchConfig.MAX_LAUNCH_LIMIT_BPS) / 10_000;
+        maxTxAmount = (totalSupply * LaunchConfig.MAX_LAUNCH_LIMIT_BPS) / 20_000; // 2% max buy
         maxWalletAmount = maxTxAmount;
 
         isLimitExempt[initialOwner] = true;

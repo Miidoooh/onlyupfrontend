@@ -79,12 +79,12 @@ export default async function Home() {
           <a className="nav-pill" href="#tokenomics">Tokenomics</a>
         </div>
         <div className="nav-actions">
-          <a className="icon-btn" href="https://t.me/" aria-label="Telegram" target="_blank" rel="noreferrer">
+          <a className="icon-btn" href="https://t.me/onlyupv4" aria-label="Telegram" target="_blank" rel="noreferrer">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M21.5 4.5 2.6 11.7c-1 .4-1 1.5 0 1.8l4.6 1.4 1.8 5.7c.2.6 1 .8 1.5.3l2.6-2.4 5 3.7c.7.5 1.7.1 1.9-.7l3.3-15c.2-.9-.7-1.7-1.6-1.4z" />
             </svg>
           </a>
-          <a className="icon-btn" href="https://x.com/" aria-label="X" target="_blank" rel="noreferrer">
+          <a className="icon-btn" href="https://x.com/onlyupv4" aria-label="X" target="_blank" rel="noreferrer">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M18.244 2H21l-6.52 7.46L22 22h-6.79l-4.72-6.18L5.05 22H2.29l6.96-7.95L2 2h6.91l4.27 5.66L18.244 2zm-2.38 18h1.74L8.23 4H6.37l9.49 16z" />
             </svg>
