@@ -2,9 +2,13 @@ node_modules/
 dist/
 .next/
 out/
+# Foundry submodule install dir only — do NOT use a bare `lib/` (would also
+# eat apps/web/src/lib and any other source `lib` folders).
+contracts/lib/
+contracts/cache/
+contracts/broadcast/
 cache/
 broadcast/
-lib/
 coverage/
 .env
 .env.*
