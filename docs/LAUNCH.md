@@ -31,12 +31,23 @@ npm run deploy
 
 `deploy` runs `DeployNativeEthRealV4Launch` on `sepolia` using `[rpc_endpoints]` in `contracts/foundry.toml` (`RPC_HTTP_URL`).
 
-### Verification (Etherscan / Sourcify)
+### Verification (Etherscan)
 
-Set `ETHERSCAN_API_KEY` (Sepolia uses Etherscan API v2). Then either:
+Set `ETHERSCAN_API_KEY` in `.env` (works for mainnet **and** Sepolia via Etherscan v2). Two ways:
 
-- Add `--verify` to the forge script invocation (see `npm run deploy:verify`), or  
-- Verify each deployed contract manually with `forge verify-contract` + encoded constructor args.
+- **`npm run deploy:verify`** — broadcasts AND verifies in the right order.
+- **`npm run verify`** — verifies the **last broadcast** without redeploying.
+
+Both call `scripts/deploy/verify-contracts.mjs`, which is intentionally narrow:
+
+1. **Reads only** the most recent `contracts/broadcast/<script>/<chainId>/run-latest.json`.
+2. **Verifies only the four real launch contracts**, in this stack order:
+   1. `BountyLaunchToken` *(token first — investors see this verified before anything else)*
+   2. `NetSellPressureBountyPolicy`
+   3. `BountyHookCore`
+   4. `BountyV4Hook`
+3. **Skips** function-call transactions, libraries, the deploy script itself, and the `Vm` interface.
+4. Encodes constructor args via `cast abi-encode` from the `arguments` field in the broadcast JSON, so verification matches the on-chain bytecode exactly.
 
 ### Sync `.env` after broadcast
 
@@ -120,7 +131,9 @@ NEXT_PUBLIC_API_URL=https://api.your-host  # or http://localhost:4311 if you sel
 ```bash
 npm run deploy        # builds, tests, broadcasts, syncs .env
 # OR
-npm run deploy:verify # same + Etherscan verify (needs ETHERSCAN_API_KEY)
+npm run deploy:verify # same + ordered Etherscan verify (token → policy → core → hook)
+# OR (re-verify a previous broadcast, no redeploy)
+npm run verify
 ```
 
 `DeployFreshNativeEthLaunch` reads `block.chainid`. Chain id `1` ⇒ uses **mainnet** PoolManager / PositionManager / Permit2 / UniversalRouter constants. Chain id anything else ⇒ Sepolia constants. Per-address overrides via env still win if you deploy on an L2.

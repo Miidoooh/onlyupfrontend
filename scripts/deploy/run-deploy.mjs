@@ -88,13 +88,12 @@ const forgeArgs = [
   "--broadcast",
   "-vvvv"
 ];
-if (verify && process.env.ETHERSCAN_API_KEY) {
-  forgeArgs.push("--verify");
-  forgeArgs.push("--etherscan-api-key");
-  forgeArgs.push(process.env.ETHERSCAN_API_KEY);
-}
 
-step(`forge script (broadcast → Sepolia)`, forge, forgeArgs, { cwd: contractsDir });
+// Note: we deliberately do NOT pass --verify to `forge script`. Foundry verifies
+// every contract in the broadcast in deployment order, but it can also drag in
+// dependencies and gives us no control if one fails mid-stack. Instead we run
+// our own ordered verifier below — token first, hook last, real contracts only.
+step(`forge script (broadcast)`, forge, forgeArgs, { cwd: contractsDir });
 
 step(
   "sync .env from broadcast",
@@ -102,5 +101,18 @@ step(
   [path.join("scripts", "deploy", "sync-env-from-broadcast.mjs"), scriptName],
   { cwd: repoRoot }
 );
+
+if (verify) {
+  if (!process.env.ETHERSCAN_API_KEY) {
+    console.error("\n✗ --verify requested but ETHERSCAN_API_KEY missing in .env");
+    process.exit(1);
+  }
+  step(
+    "verify contracts (token → policy → core → hook)",
+    process.execPath,
+    [path.join("scripts", "deploy", "verify-contracts.mjs"), scriptName],
+    { cwd: repoRoot }
+  );
+}
 
 console.log("\n✓ deploy complete.");

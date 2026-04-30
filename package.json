@@ -21,6 +21,7 @@
     "deploy": "node scripts/deploy/run-deploy.mjs",
     "deploy:verify": "node scripts/deploy/run-deploy.mjs --verify",
     "deploy:sync-env": "node scripts/deploy/sync-env-from-broadcast.mjs",
+    "verify": "node scripts/deploy/verify-contracts.mjs",
     "deploy:legacy-launch": "node scripts/deploy/run-deploy.mjs DeployNativeEthRealV4Launch.s.sol",
     "contracts:deploy:real-hook": "forge script contracts/script/DeployRealV4Hook.s.sol:DeployRealV4Hook --broadcast -vvvv",
     "contracts:init:real-v4-pool": "forge script contracts/script/InitializeRealV4Pool.s.sol:InitializeRealV4Pool --broadcast -vvvv",
