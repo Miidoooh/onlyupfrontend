@@ -5,14 +5,14 @@ import { Actions, V4Planner } from "@uniswap/v4-sdk";
 import { CommandType, RoutePlanner } from "@uniswap/universal-router-sdk";
 import { useAppKit } from "@reown/appkit/react";
 import { createPublicClient, formatEther, formatUnits, http, parseEther, parseUnits, type Hex } from "viem";
-import { sepolia } from "viem/chains";
 import { useAccount, useSwitchChain, useWalletClient } from "wagmi";
 import {
+  ACTIVE_CHAIN,
+  ACTIVE_CHAIN_ID,
   ACTIVE_POOL_KEY,
   applySlippage,
   asHex,
   QUOTER_ABI,
-  SEPOLIA_CHAIN_ID,
   SEPOLIA_RPC_URL,
   UNIVERSAL_ROUTER,
   UNIVERSAL_ROUTER_ABI,
@@ -22,7 +22,7 @@ import {
 type SwapSide = "buy" | "sell";
 
 const publicClient = createPublicClient({
-  chain: sepolia,
+  chain: ACTIVE_CHAIN,
   transport: http(SEPOLIA_RPC_URL)
 });
 
@@ -47,8 +47,8 @@ export function V4SwapPanel() {
       await open({ view: "Connect" });
       throw new Error("Connect wallet with Reown AppKit first.");
     }
-    if (chainId !== SEPOLIA_CHAIN_ID) {
-      await switchChainAsync({ chainId: SEPOLIA_CHAIN_ID });
+    if (chainId !== ACTIVE_CHAIN_ID) {
+      await switchChainAsync({ chainId: ACTIVE_CHAIN_ID });
     }
     if (!walletClient) throw new Error("Wallet client not ready. Try again after connection finishes.");
     return { walletClient, account: address };

@@ -153,7 +153,8 @@ async function main() {
     "--port",      String(ANVIL_PORT),
     "--accounts",  "20",
     "--balance",   "10000"
-    // omit --block-time → anvil auto-mines on every tx (perfect for load test)
+    // No --block-time → anvil auto-mines on every tx. Combined with
+    // confirmations:0 in run.ts, every receipt resolves instantly.
   ], { stdio: ["ignore", "pipe", "pipe"], detached: false });
   anvil.stdout?.pipe(anvilLogStream);
   anvil.stderr?.pipe(anvilLogStream);
@@ -180,12 +181,23 @@ async function main() {
   const apiLog    = (await import("node:fs")).createWriteStream(resolve(repoRoot, "api.log"),    { flags: "w" });
   const workerLog = (await import("node:fs")).createWriteStream(resolve(repoRoot, "worker.log"), { flags: "w" });
 
+  // Force the spawned children to use anvil — overrides anything stale in the
+  // parent shell's process.env (loadDotenv only fills empty vars).
+  const childEnv = {
+    ...process.env,
+    RPC_HTTP_URL: ANVIL_RPC,
+    RPC_WS_URL: "",
+    WORKER_START_BLOCK: String(Math.max(0, forkBlock - 5)),
+    WORKER_POLL_INTERVAL_MS: "2000",
+    API_SEED_DEMO_DATA: "false"
+  };
+
   log("starting api", "npm run dev:api  (logs → api.log)");
-  api = spawn(npmBin, ["run", "dev:api"], { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"], shell: isWin });
+  api = spawn(npmBin, ["run", "dev:api"], { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"], shell: isWin, env: childEnv });
   api.stdout?.pipe(apiLog); api.stderr?.pipe(apiLog);
 
   log("starting worker", "npm run dev:worker  (logs → worker.log)");
-  worker = spawn(npmBin, ["run", "dev:worker"], { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"], shell: isWin });
+  worker = spawn(npmBin, ["run", "dev:worker"], { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"], shell: isWin, env: childEnv });
   worker.stdout?.pipe(workerLog); worker.stderr?.pipe(workerLog);
 
   // give them time to boot + connect
@@ -196,11 +208,26 @@ async function main() {
   console.log(c("\n  ▲ running load test (100 wallets × 200 rounds)\n", "green"));
   console.log(c("  open http://localhost:3000 in your browser to watch live\n", "gray"));
 
+  // Sane defaults the user can still override per-run with $env:WALLETS etc.
+  const loadtestEnv = {
+    ...process.env,
+    ANVIL_RPC_URL: ANVIL_RPC,
+    WALLETS: process.env.WALLETS ?? "100",
+    ROUNDS: process.env.ROUNDS ?? "200",
+    START_BALANCE_UP: process.env.START_BALANCE_UP ?? "5000000",
+    START_BALANCE_ETH: process.env.START_BALANCE_ETH ?? "10",
+    MIN_SELL_UP: process.env.MIN_SELL_UP ?? "20",
+    MAX_SELL_UP: process.env.MAX_SELL_UP ?? "200000",
+    MIN_BUY_ETH: process.env.MIN_BUY_ETH ?? "0.001",
+    MAX_BUY_ETH: process.env.MAX_BUY_ETH ?? "0.5"
+  };
+  log("loadtest config", `wallets=${loadtestEnv.WALLETS} rounds=${loadtestEnv.ROUNDS} startBalanceUp=${loadtestEnv.START_BALANCE_UP}`);
+
   const loadtest = spawnSync(npmBin, ["run", "loadtest"], {
     cwd: repoRoot,
     stdio: "inherit",
     shell: isWin,
-    env: { ...process.env, ANVIL_RPC_URL: ANVIL_RPC }
+    env: loadtestEnv
   });
 
   // 7. Keep services running for a bit so the dashboard can ingest the tail of events

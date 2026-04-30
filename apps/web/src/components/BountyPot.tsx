@@ -1,4 +1,4 @@
-import { CountUp } from "./CountUp";
+import { formatCompactWei } from "@bounty/shared";
 import { LiveDot } from "./LiveDot";
 
 interface BountyPotProps {
@@ -10,16 +10,6 @@ interface BountyPotProps {
   isActive: boolean;
 }
 
-function weiToNumber(value: bigint, decimals = 18): number {
-  if (value === 0n) return 0;
-  const sign = value < 0n ? -1 : 1;
-  const abs = sign === -1 ? -value : value;
-  const denom = 10n ** BigInt(decimals);
-  const whole = Number(abs / denom);
-  const frac = Number(abs % denom) / Number(denom);
-  return sign * (whole + frac);
-}
-
 export function BountyPot({
   amountWei,
   symbol,
@@ -28,8 +18,8 @@ export function BountyPot({
   qualifyingSymbol = "ETH",
   isActive
 }: BountyPotProps) {
-  const amount = weiToNumber(amountWei);
-  const qualifying = weiToNumber(qualifyingBuyWei);
+  const amount = formatCompactWei(amountWei);
+  const qualifying = formatCompactWei(qualifyingBuyWei);
 
   return (
     <div className="pot-card panel warm">
@@ -41,8 +31,8 @@ export function BountyPot({
         {isActive ? <LiveDot label="ARMED" /> : <LiveDot label="REARMING" />}
       </div>
 
-      <div className="pot-amount">
-        <CountUp to={amount} decimals={4} duration={1600} />
+      <div className="pot-amount" title={`${amountWei.toString()} (raw wei)`}>
+        <span className="pot-number">{amount}</span>
         <span className="unit">{symbol}</span>
       </div>
 
@@ -60,7 +50,7 @@ export function BountyPot({
         <div>
           <span className="label">🦍 buy vol</span>
           <span className="value">
-            <CountUp to={qualifying} decimals={3} duration={1400} suffix={` ${qualifyingSymbol}`} />
+            {qualifying} {qualifyingSymbol}
           </span>
         </div>
       </div>

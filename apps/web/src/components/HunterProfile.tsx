@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useAppKit } from "@reown/appkit/react";
 import { useAccount } from "wagmi";
-import { formatTokenAmount, shortAddress, type HexAddress } from "@bounty/shared";
+import { formatCompactWei, shortAddress, type HexAddress } from "@bounty/shared";
 import type { ApiLeaderboardEntry } from "../lib/api";
 
 interface HunterProfileProps {
@@ -43,11 +43,11 @@ export function HunterProfile({ leaderboard }: HunterProfileProps) {
         <div className="hunter-stats">
           <div>
             <span className="label">$UP bought</span>
-            <strong>{formatTokenAmount(BigInt(hunter.totalBought))}</strong>
+            <strong>{formatCompactWei(BigInt(hunter.totalBought))}</strong>
           </div>
           <div>
             <span className="label">claimed</span>
-            <strong>{formatTokenAmount(BigInt(hunter.totalRewards))}</strong>
+            <strong>{formatCompactWei(BigInt(hunter.totalRewards))}</strong>
           </div>
           <div>
             <span className="label">bags hunted</span>

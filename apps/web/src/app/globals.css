@@ -518,17 +518,34 @@ button { font: inherit; cursor: pointer; }
 
 .pot-amount {
   font-family: var(--font-brand, "Bungee"), ui-sans-serif;
-  font-size: clamp(48px, 7vw, 76px);
+  /* Adaptive sizing: never overflow the panel. cqi falls back to vw on browsers
+     without container queries support. */
+  font-size: clamp(40px, 13cqi, 72px);
   line-height: 1;
   letter-spacing: -0.02em;
   color: var(--g-50);
   text-shadow: 0 6px 0 #03100A, 0 0 30px rgba(0,255,136,0.5);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.pot-card { container-type: inline-size; }
+.pot-amount .pot-number {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .pot-amount .unit {
   font-size: 0.45em;
-  margin-left: 10px;
   color: var(--neon);
   text-shadow: none;
+  white-space: nowrap;
 }
 
 .pot-sub { color: var(--muted); font-size: 14px; line-height: 1.55; margin: 0; }
@@ -557,6 +574,9 @@ button { font: inherit; cursor: pointer; }
   font-size: 18px;
   color: var(--g-50);
   font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ====================================================================
@@ -666,10 +686,14 @@ button { font: inherit; cursor: pointer; }
   display: block;
   margin-top: 8px;
   font-family: var(--font-brand, "Bungee"), ui-sans-serif;
-  font-size: 26px;
+  font-size: clamp(20px, 3.5cqi, 26px);
   letter-spacing: -0.01em;
   color: var(--g-50);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.stat { container-type: inline-size; }
 
 /* ====================================================================
    HOW IT WORKS — comic strip

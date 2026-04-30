@@ -2,12 +2,15 @@
 
 import { createAppKit } from "@reown/appkit/react";
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
-import { sepolia } from "@reown/appkit/networks";
+import { mainnet, sepolia, type AppKitNetwork } from "@reown/appkit/networks";
 import { QueryClient } from "@tanstack/react-query";
 
 export const projectId = "ae975541a386653f5b6e53354513e427";
 
-export const networks = [sepolia] as [typeof sepolia, ...Array<typeof sepolia>];
+const chainId = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? "11155111");
+const primary: AppKitNetwork = chainId === 1 ? mainnet : sepolia;
+
+export const networks = [primary] as [AppKitNetwork, ...AppKitNetwork[]];
 
 export const queryClient = new QueryClient();
 

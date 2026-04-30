@@ -160,7 +160,7 @@ async function setup(
     const hash = await operatorClient.writeContract({
       address: ADDR.TOKEN, abi: tokenAbi, functionName: "enableTrading"
     });
-    await publicClient.waitForTransactionReceipt({ hash });
+    await publicClient.waitForTransactionReceipt({ hash, confirmations: 0, timeout: 600_000 });
     console.log(c("✓", "green"));
   } else {
     console.log(`  enableTrading()  ${c("(already enabled)", "gray")}`);
@@ -176,7 +176,7 @@ async function setup(
     const hash = await operatorClient.writeContract({
       address: ADDR.TOKEN, abi: tokenAbi, functionName: "setLimitExempt", args: [w.address, true]
     });
-    await publicClient.waitForTransactionReceipt({ hash });
+    await publicClient.waitForTransactionReceipt({ hash, confirmations: 0, timeout: 600_000 });
   }
   console.log(c(`✓ ${wallets.length} wallets exempt`, "green"));
 
@@ -187,9 +187,15 @@ async function setup(
   });
   console.log(`  operator $UP     ${fmtUp(operatorBalance)} UP`);
 
-  // If operator has < (wallets * upAmount), bootstrap by impersonating the v4
-  // PoolManager (which holds all LP'd UP) and pulling tokens to operator.
-  // PoolManager is in isLimitExempt → token transfer bypasses anti-whale limits.
+  // Re-impersonate operator (anvil_setStorageAt below may interact oddly with
+  // existing impersonation state in some anvil builds — be explicit).
+  await testClient.impersonateAccount({ address: ADDR.OPERATOR });
+
+  // If operator has < (wallets * upAmount), bootstrap by directly writing the
+  // token's `balanceOf[operator]` storage slot via anvil_setStorageAt. We
+  // dynamically discover the slot by sweeping candidate slots and matching
+  // against the on-chain balanceOf of a known holder (PoolManager, which holds
+  // the LP'd supply). This avoids brittle assumptions about Solidity packing.
   const needTotal = upAmount * BigInt(wallets.length);
   if (operatorBalance < needTotal) {
     process.stdout.write(`  bootstrap $UP    `);
@@ -197,38 +203,66 @@ async function setup(
       address: ADDR.TOKEN, abi: tokenAbi, functionName: "balanceOf", args: [ADDR.POOL_MANAGER]
     });
     if (pmBalance === 0n) {
-      throw new Error(`PoolManager ${ADDR.POOL_MANAGER} has 0 UP. Add liquidity first or run after a real LP add.`);
+      throw new Error(`PoolManager ${ADDR.POOL_MANAGER} has 0 UP. Add liquidity first.`);
     }
-    const pull = pmBalance < needTotal ? pmBalance : needTotal * 2n;
-    await testClient.impersonateAccount({ address: ADDR.POOL_MANAGER });
-    await testClient.setBalance({ address: ADDR.POOL_MANAGER, value: parseEther("1") });
-    const pmClient = createWalletClient({
-      account: ADDR.POOL_MANAGER, chain: anvilSepolia, transport: http(CONFIG.anvilRpc)
+
+    // Sweep storage slots 0..15 for the balanceOf mapping by computing the
+    // mapping slot for PoolManager and looking for one that matches pmBalance.
+    const { encodeAbiParameters, keccak256, numberToHex } = await import("viem");
+    const expected = `0x${pmBalance.toString(16).padStart(64, "0")}` as Hex;
+    let foundSlot: bigint | undefined;
+    for (let s = 0n; s <= 15n; s++) {
+      const probe = keccak256(
+        encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [ADDR.POOL_MANAGER, s])
+      );
+      const value = await publicClient.getStorageAt({ address: ADDR.TOKEN, slot: probe });
+      if (value && value.toLowerCase() === expected.toLowerCase()) { foundSlot = s; break; }
+    }
+    if (foundSlot === undefined) {
+      throw new Error("Could not locate balanceOf storage slot");
+    }
+
+    const operatorSlot = keccak256(
+      encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [ADDR.OPERATOR, foundSlot])
+    );
+    const targetBalance = needTotal * 2n;
+    await testClient.setStorageAt({
+      address: ADDR.TOKEN,
+      index: operatorSlot,
+      value: numberToHex(targetBalance, { size: 32 })
     });
-    const hash = await pmClient.writeContract({
-      address: ADDR.TOKEN, abi: tokenAbi, functionName: "transfer", args: [ADDR.OPERATOR, pull]
-    });
-    await publicClient.waitForTransactionReceipt({ hash });
-    await testClient.stopImpersonatingAccount({ address: ADDR.POOL_MANAGER });
     operatorBalance = await publicClient.readContract({
       address: ADDR.TOKEN, abi: tokenAbi, functionName: "balanceOf", args: [ADDR.OPERATOR]
     });
-    console.log(c(`✓ ${fmtUp(operatorBalance)} UP (impersonated PoolManager)`, "green"));
+    if (operatorBalance < needTotal) {
+      throw new Error(`Storage write didn't take. balance=${fmtUp(operatorBalance)} expected ≥ ${fmtUp(needTotal)}`);
+    }
+    console.log(c(`✓ ${fmtUp(operatorBalance)} UP (slot ${foundSlot} via anvil_setStorageAt)`, "green"));
+    // setStorageAt may invalidate active impersonations on some anvil versions
+    await testClient.impersonateAccount({ address: ADDR.OPERATOR });
   }
 
   process.stdout.write(`  transfer $UP     `);
+  let sentTransfers = 0;
   for (const w of wallets) {
     const balance = await publicClient.readContract({
       address: ADDR.TOKEN, abi: tokenAbi, functionName: "balanceOf", args: [w.address]
     });
     if (balance >= upAmount) continue;
     const need = upAmount - balance;
-    const hash = await operatorClient.writeContract({
-      address: ADDR.TOKEN, abi: tokenAbi, functionName: "transfer", args: [w.address, need]
-    });
-    await publicClient.waitForTransactionReceipt({ hash });
+    try {
+      const hash = await operatorClient.writeContract({
+        address: ADDR.TOKEN, abi: tokenAbi, functionName: "transfer", args: [w.address, need]
+      });
+      await publicClient.waitForTransactionReceipt({ hash, confirmations: 0, timeout: 600_000 });
+      sentTransfers++;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message.split("\n")[0] : String(err);
+      console.log(`\n    ${c("✗", "red")} transfer to ${shortAddr(w.address)} failed: ${msg}`);
+      throw err;
+    }
   }
-  console.log(c(`✓ ${CONFIG.startBalanceUp} UP × ${wallets.length}`, "green"));
+  console.log(c(`✓ ${sentTransfers} transfers (${CONFIG.startBalanceUp} UP each)`, "green"));
 
   await testClient.stopImpersonatingAccount({ address: ADDR.OPERATOR });
 
@@ -245,7 +279,7 @@ async function setup(
     const hash = await wc.writeContract({
       address: ADDR.TOKEN, abi: tokenAbi, functionName: "approve", args: [ADDR.CORE, MAX_UINT256]
     });
-    await publicClient.waitForTransactionReceipt({ hash });
+    await publicClient.waitForTransactionReceipt({ hash, confirmations: 0, timeout: 600_000 });
     await testClient.stopImpersonatingAccount({ address: w.address });
     approved += 1;
   }
@@ -373,7 +407,7 @@ async function runLoad(
         functionName: "reportSwap",
         args: [ADDR.POOL_ID, w.address, ADDR.TOKEN, ADDR.NATIVE_ETH, side, amount]
       });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash, confirmations: 0, timeout: 600_000 });
       if (receipt.status === "success") {
         if (isBuy) stats.buys += 1; else stats.sells += 1;
         decodeAndPrint(receipt, stats, label);
@@ -435,7 +469,7 @@ async function claimSweep(
         const hash = await wc.writeContract({
           address: ADDR.CORE, abi: coreAbi, functionName: "claim", args: [windowId]
         });
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        const receipt = await publicClient.waitForTransactionReceipt({ hash, confirmations: 0, timeout: 600_000 });
         if (receipt.status === "success") {
           claims += 1;
           decodeAndPrint(receipt, stats, c(`#${claims.toString().padStart(3, "0")}`, "dim"));

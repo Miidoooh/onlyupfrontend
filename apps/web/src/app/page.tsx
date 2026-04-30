@@ -1,4 +1,4 @@
-import { formatTokenAmount, shortAddress } from "@bounty/shared";
+import { formatCompact, formatCompactWei, shortAddress } from "@bounty/shared";
 import { BountyPot } from "../components/BountyPot";
 import { CopyCA } from "../components/CopyCA";
 import { HowItWorks } from "../components/HowItWorks";
@@ -19,13 +19,6 @@ function asBigInt(value: unknown): bigint {
   return 0n;
 }
 
-function weiToFloat(value: bigint, decimals = 18): number {
-  if (value === 0n) return 0;
-  const denom = 10n ** BigInt(decimals);
-  const whole = Number(value / denom);
-  const frac = Number(value % denom) / Number(denom);
-  return whole + frac;
-}
 
 const FEED_ICONS: Record<string, { className: string; glyph: string; remix?: { title: string; description?: (d: string) => string } }> = {
   BountyOpened:          { className: "warm", glyph: "💰", remix: { title: "BAG ARMED" } },
@@ -67,9 +60,9 @@ export default async function Home() {
   const sellPressureBps = currentPressure?.sellPressureBps ?? stats.sellPressureBps;
   const bountyPctLabel = `${(bountyBps / 100).toFixed(2)}%`;
 
-  const totalFunded = weiToFloat(asBigInt(stats.totalBountyFunded));
-  const totalClaimed = weiToFloat(asBigInt(stats.totalRewardsClaimed));
-  const largestDump = weiToFloat(asBigInt(stats.largestDump));
+  const totalFunded  = formatCompactWei(asBigInt(stats.totalBountyFunded));
+  const totalClaimed = formatCompactWei(asBigInt(stats.totalRewardsClaimed));
+  const largestDump  = formatCompactWei(asBigInt(stats.largestDump));
 
   const tokenSymbol = launch.symbol || "UP";
   const isActive = Boolean(featured);
@@ -167,22 +160,22 @@ export default async function Home() {
         <div className="stat">
           <span className="stat-emoji" aria-hidden="true">🪙</span>
           <span className="label">total funded</span>
-          <span className="value">{totalFunded.toFixed(2)}</span>
+          <span className="value">{totalFunded}</span>
         </div>
         <div className="stat">
           <span className="stat-emoji" aria-hidden="true">💸</span>
           <span className="label">paid to apes</span>
-          <span className="value">{totalClaimed.toFixed(2)}</span>
+          <span className="value">{totalClaimed}</span>
         </div>
         <div className="stat">
           <span className="stat-emoji" aria-hidden="true">🦍</span>
           <span className="label">total apes</span>
-          <span className="value">{stats.totalHunters.toLocaleString()}</span>
+          <span className="value">{formatCompact(stats.totalHunters)}</span>
         </div>
         <div className="stat">
           <span className="stat-emoji" aria-hidden="true">🐋</span>
           <span className="label">biggest dump</span>
-          <span className="value">{largestDump.toFixed(2)}</span>
+          <span className="value">{largestDump}</span>
         </div>
       </section>
 
@@ -255,7 +248,7 @@ export default async function Home() {
                     <span className={`rank ${rankClass}`}>{title}</span>
                     <span className="name">{shortAddress(entry.wallet)}</span>
                     <div className="meta">
-                      <strong>{formatTokenAmount(asBigInt(entry.totalBought))} {tokenSymbol}</strong>
+                      <strong>{formatCompactWei(asBigInt(entry.totalBought))} {tokenSymbol}</strong>
                       <span>{entry.windowsWon} hunt{entry.windowsWon === 1 ? "" : "s"}</span>
                     </div>
                   </div>

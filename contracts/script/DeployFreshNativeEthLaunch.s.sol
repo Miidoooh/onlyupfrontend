@@ -12,6 +12,7 @@ import {BountyLaunchToken} from "../src/token/BountyLaunchToken.sol";
 
 interface Vm {
     function addr(uint256 privateKey) external returns (address);
+    function envAddress(string calldata key) external returns (address);
     function envString(string calldata key) external returns (string memory);
     function envUint(string calldata key) external returns (uint256);
     function startBroadcast(uint256 privateKey) external;
@@ -27,10 +28,18 @@ contract DeployFreshNativeEthLaunch {
     Vm private constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     address private constant CREATE2_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
-    address private constant SEPOLIA_POOL_MANAGER = 0xE03A1074c86CFeDd5C142C4F04F1a1536e203543;
+
+    // Sepolia v4 deployment (Uniswap docs).
+    address private constant SEPOLIA_POOL_MANAGER     = 0xE03A1074c86CFeDd5C142C4F04F1a1536e203543;
     address private constant SEPOLIA_POSITION_MANAGER = 0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4;
-    address private constant SEPOLIA_PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
+    address private constant SEPOLIA_PERMIT2          = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
     address private constant SEPOLIA_UNIVERSAL_ROUTER = 0x3A9D48AB9751398BbFa63ad67599Bb04e4BdF98b;
+
+    // Mainnet v4 deployment (Uniswap docs — same Permit2 address everywhere).
+    address private constant MAINNET_POOL_MANAGER     = 0x000000000004444c5dc75cB358380D2e3dE08A90;
+    address private constant MAINNET_POSITION_MANAGER = 0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e;
+    address private constant MAINNET_PERMIT2          = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
+    address private constant MAINNET_UNIVERSAL_ROUTER = 0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af;
 
     uint160 private constant HOOK_FLAGS = Hooks.AFTER_SWAP_FLAG;
     uint256 private constant DEFAULT_MIN_DUMP_AMOUNT = 10 ether;
@@ -61,6 +70,16 @@ contract DeployFreshNativeEthLaunch {
         string memory symbol = _envStringOr("TOKEN_SYMBOL", "UP");
         uint256 minDumpAmount = _envUintOr("MIN_DUMP_AMOUNT", DEFAULT_MIN_DUMP_AMOUNT);
 
+        // Resolve chain-specific Uniswap v4 addresses. block.chainid == 1 is
+        // mainnet; everything else falls back to the Sepolia constants. Each
+        // can also be overridden individually via env (V4_POOL_MANAGER, etc.)
+        // for L2s or testnets the script doesn't know about.
+        bool isMainnet = block.chainid == 1;
+        address poolManager     = _envAddressOr("V4_POOL_MANAGER",     isMainnet ? MAINNET_POOL_MANAGER     : SEPOLIA_POOL_MANAGER);
+        address positionManager = _envAddressOr("V4_POSITION_MANAGER", isMainnet ? MAINNET_POSITION_MANAGER : SEPOLIA_POSITION_MANAGER);
+        address permit2         = _envAddressOr("PERMIT2_ADDRESS",     isMainnet ? MAINNET_PERMIT2          : SEPOLIA_PERMIT2);
+        address universalRouter = _envAddressOr("UNIVERSAL_ROUTER",    isMainnet ? MAINNET_UNIVERSAL_ROUTER : SEPOLIA_UNIVERSAL_ROUTER);
+
         vm.startBroadcast(privateKey);
 
         token = new BountyLaunchToken(name, symbol, owner, owner);
@@ -81,21 +100,21 @@ contract DeployFreshNativeEthLaunch {
             minDumpAmount
         );
 
-        bytes memory constructorArgs = abi.encode(IPoolManager(SEPOLIA_POOL_MANAGER), address(core), owner);
+        bytes memory constructorArgs = abi.encode(IPoolManager(poolManager), address(core), owner);
         (address hookAddress, bytes32 salt) =
             HookMiner.find(CREATE2_DEPLOYER, HOOK_FLAGS, type(BountyV4Hook).creationCode, constructorArgs);
 
-        hook = new BountyV4Hook{salt: salt}(IPoolManager(SEPOLIA_POOL_MANAGER), address(core), owner);
+        hook = new BountyV4Hook{salt: salt}(IPoolManager(poolManager), address(core), owner);
         require(address(hook) == hookAddress, "hook address mismatch");
 
         policy.setHook(address(core));
         core.setReporter(address(hook));
 
         // Limit exemptions so v4 routers/managers can move the token while wallet is gated by maxTx.
-        token.setLimitExempt(SEPOLIA_POOL_MANAGER, true);
-        token.setLimitExempt(SEPOLIA_POSITION_MANAGER, true);
-        token.setLimitExempt(SEPOLIA_PERMIT2, true);
-        token.setLimitExempt(SEPOLIA_UNIVERSAL_ROUTER, true);
+        token.setLimitExempt(poolManager, true);
+        token.setLimitExempt(positionManager, true);
+        token.setLimitExempt(permit2, true);
+        token.setLimitExempt(universalRouter, true);
         token.setLimitExempt(address(core), true);
         token.setLimitExempt(address(hook), true);
 
@@ -118,6 +137,14 @@ contract DeployFreshNativeEthLaunch {
     function _envUintOr(string memory key, uint256 fallbackValue) private returns (uint256) {
         try vm.envUint(key) returns (uint256 configured) {
             return configured == 0 ? fallbackValue : configured;
+        } catch {
+            return fallbackValue;
+        }
+    }
+
+    function _envAddressOr(string memory key, address fallbackValue) private returns (address) {
+        try vm.envAddress(key) returns (address configured) {
+            return configured == address(0) ? fallbackValue : configured;
         } catch {
             return fallbackValue;
         }
