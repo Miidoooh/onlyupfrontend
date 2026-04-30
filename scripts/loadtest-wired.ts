@@ -3,11 +3,12 @@
  *
  * What it does (in order):
  *   1. Spawns `anvil` forked from Sepolia (background)
- *   2. Re-points worker/API at the fork RPC and resets WORKER_START_BLOCK
- *   3. Restarts API + worker (kills any old ones first)
- *   4. Runs scripts/loadtest/run.ts: 100 wallets, 200 rounds of buys+sells,
- *      mines past windows, claims rewards.
- *   5. Restores original .env when done (Ctrl-C is safe — it still restores).
+ *   2. Boots api + worker as child processes with anvil RPC injected via env —
+ *      we deliberately DO NOT touch the repo .env. Real-deploy `.env` stays
+ *      pristine so a later `npm run deploy:verify` can't accidentally use the
+ *      local fork URL even if this script gets force-killed.
+ *   3. Runs scripts/loadtest/run.ts: random buys + sells, mines past windows,
+ *      claims rewards.
  *
  * Run:    npx tsx scripts/loadtest-wired.ts
  *         OR  npm run loadtest:wired
@@ -16,7 +17,7 @@
  */
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync, copyFileSync, unlinkSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,8 +26,19 @@ import { createPublicClient, http } from "viem";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..");
 const envPath = resolve(repoRoot, ".env");
-const envBackupPath = resolve(repoRoot, ".env.before-loadtest");
 const checkpointPath = resolve(repoRoot, "apps/worker/.checkpoint");
+
+/** Read .env values without mutating the file. We only need the upstream RPC. */
+function readEnvFile(): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!existsSync(envPath)) return out;
+  for (const line of readFileSync(envPath, "utf8").split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (!m) continue;
+    out[m[1]] = (m[2] ?? "").replace(/^["']|["']$/g, "");
+  }
+  return out;
+}
 
 const ANVIL_RPC = "http://127.0.0.1:8545";
 const ANVIL_PORT = 8545;
@@ -40,19 +52,6 @@ const colors = {
 function log(label: string, msg = "") { console.log(`${c("▲", "green")} ${c(label.padEnd(28), "cyan")} ${msg}`); }
 function warn(label: string, msg = "") { console.log(`${c("⚠", "yellow")} ${c(label.padEnd(28), "cyan")} ${msg}`); }
 function fail(label: string, msg = "") { console.log(`${c("✗", "red")} ${c(label.padEnd(28), "cyan")} ${msg}`); }
-
-function readDotenv() {
-  return readFileSync(envPath, "utf8");
-}
-function writeDotenv(content: string) {
-  writeFileSync(envPath, content);
-}
-
-function patchEnv(content: string, key: string, value: string): string {
-  const re = new RegExp(`^${key}=.*$`, "m");
-  if (re.test(content)) return content.replace(re, `${key}=${value}`);
-  return `${content.replace(/\s*$/, "")}\n${key}=${value}\n`;
-}
 
 function findAnvil(): string {
   if (process.env.ANVIL_BIN) return process.env.ANVIL_BIN;
@@ -109,15 +108,10 @@ function cleanup() {
   for (const p of [anvil, worker, api]) {
     try { p?.kill("SIGTERM"); } catch { /* ignore */ }
   }
-  // restore .env
-  if (existsSync(envBackupPath)) {
-    copyFileSync(envBackupPath, envPath);
-    unlinkSync(envBackupPath);
-    console.log(`  ✓ .env restored to ${envPath}`);
-  }
   if (existsSync(checkpointPath)) {
     try { unlinkSync(checkpointPath); console.log("  ✓ worker checkpoint cleared"); } catch { /* ignore */ }
   }
+  // We never touched .env — nothing to restore.
 }
 
 process.on("SIGINT",  () => { cleanup(); process.exit(130); });

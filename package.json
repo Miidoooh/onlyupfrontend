@@ -20,6 +20,7 @@
     "contracts:test": "forge test --root contracts",
     "deploy": "node scripts/deploy/run-deploy.mjs",
     "deploy:verify": "node scripts/deploy/run-deploy.mjs --verify",
+    "deploy:finish": "node scripts/deploy/run-deploy.mjs FinishLaunch.s.sol",
     "deploy:sync-env": "node scripts/deploy/sync-env-from-broadcast.mjs",
     "verify": "node scripts/deploy/verify-contracts.mjs",
     "post-deploy": "node scripts/deploy/post-deploy.mjs",
