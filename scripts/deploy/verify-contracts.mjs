@@ -118,14 +118,19 @@ for (const tx of broadcast.transactions ?? []) {
   }
 }
 
+const present = ORDER.filter((n) => deploys[n]);
 const missing = ORDER.filter((n) => !deploys[n]);
-if (missing.length > 0) {
-  console.error(`✗ broadcast does not contain: ${missing.join(", ")}`);
-  console.error(`  Found: ${Object.keys(deploys).join(", ") || "(none)"}`);
+
+if (present.length === 0) {
+  console.error(`✗ broadcast contains none of: ${ORDER.join(", ")}`);
+  console.error(`  ${path.relative(repoRoot, broadcastPath)} appears empty or unrelated.`);
   process.exit(1);
 }
+if (missing.length > 0) {
+  console.log(`⚠ skipping (not in this broadcast): ${missing.join(", ")}`);
+}
 
-console.log(`▲ verifying ${ORDER.length} contracts on chain ${chainId}\n  broadcast: ${path.relative(repoRoot, broadcastPath)}\n`);
+console.log(`▲ verifying ${present.length} contract(s) on chain ${chainId}\n  broadcast: ${path.relative(repoRoot, broadcastPath)}\n`);
 
 /** Encode constructor args via `cast abi-encode`. Returns a 0x-prefixed hex string (no leading function selector). */
 function encodeCtorArgs(name, args) {
@@ -155,7 +160,7 @@ function verifyOne(idx, name) {
   if (encoded && encoded !== "0x") {
     forgeArgs.push("--constructor-args", encoded);
   }
-  console.log(`\n[${idx + 1}/${ORDER.length}] ${name}`);
+  console.log(`\n[${idx + 1}/${present.length}] ${name}`);
   console.log(`  address ${address}`);
   console.log(`  source  ${target}`);
   console.log(`  args    ${args.length === 0 ? "(none)" : JSON.stringify(args)}`);
@@ -171,10 +176,10 @@ function verifyOne(idx, name) {
 }
 
 let firstFailure = 0;
-for (let i = 0; i < ORDER.length; i++) {
-  const status = verifyOne(i, ORDER[i]);
+for (let i = 0; i < present.length; i++) {
+  const status = verifyOne(i, present[i]);
   if (status !== 0 && firstFailure === 0) firstFailure = status;
 }
 
-console.log(firstFailure === 0 ? "\n✓ all four contracts verified." : "\n⚠ verification finished with at least one warning/error above.");
+console.log(firstFailure === 0 ? `\n✓ ${present.length} contract(s) verified.` : "\n⚠ verification finished with at least one warning/error above.");
 process.exit(firstFailure);
