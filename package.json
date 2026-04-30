@@ -1,0 +1,50 @@
+{
+  "name": "bounty-hook-platform",
+  "private": true,
+  "version": "0.1.0",
+  "description": "The Bounty Hook production monorepo: Uniswap v4 hook, indexer, API, bots, and gamified frontend.",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @bounty/shared && npm run build -w @bounty/api && npm run build -w @bounty/worker && npm run build -w @bounty/web",
+    "lint": "npm run build -w @bounty/shared && npm run lint --workspaces --if-present",
+    "test": "npm run build -w @bounty/shared && npm run test --workspaces --if-present",
+    "dev:web": "npm run dev -w @bounty/web",
+    "dev:api": "npm run dev -w @bounty/api",
+    "dev:worker": "npm run dev -w @bounty/worker",
+    "simulate:v4": "tsx apps/worker/src/simulate-v4-flow.ts",
+    "contracts:build": "forge build --root contracts",
+    "contracts:test": "forge test --root contracts",
+    "deploy": "node scripts/deploy/run-deploy.mjs",
+    "deploy:verify": "node scripts/deploy/run-deploy.mjs --verify",
+    "deploy:sync-env": "node scripts/deploy/sync-env-from-broadcast.mjs",
+    "deploy:legacy-launch": "node scripts/deploy/run-deploy.mjs DeployNativeEthRealV4Launch.s.sol",
+    "contracts:deploy:real-hook": "forge script contracts/script/DeployRealV4Hook.s.sol:DeployRealV4Hook --broadcast -vvvv",
+    "contracts:init:real-v4-pool": "forge script contracts/script/InitializeRealV4Pool.s.sol:InitializeRealV4Pool --broadcast -vvvv",
+    "contracts:deploy:native-v4-launch": "forge script contracts/script/DeployNativeEthRealV4Launch.s.sol:DeployNativeEthRealV4Launch --broadcast -vvvv",
+    "contracts:configure:native-v4-route": "forge script contracts/script/ConfigureNativeEthV4Route.s.sol:ConfigureNativeEthV4Route --broadcast -vvvv",
+    "smoke": "npm run smoke -w @bounty/worker",
+    "loadtest:anvil": "tsx scripts/loadtest/anvil.ts",
+    "loadtest": "tsx scripts/loadtest/run.ts",
+    "loadtest:typecheck": "tsc -p scripts/loadtest/tsconfig.json --noEmit",
+    "doctor": "tsx scripts/loadtest/doctor.ts",
+    "find-pool": "node scripts/find-pool.mjs",
+    "check-quote": "node scripts/check-quote.mjs"
+  },
+  "engines": {
+    "node": ">=20.11.0",
+    "npm": ">=10.0.0"
+  },
+  "devDependencies": {
+    "@openzeppelin/contracts": "^5.6.1",
+    "@types/node": "^20.12.12",
+    "@uniswap/v4-core": "^1.0.2",
+    "@uniswap/v4-periphery": "^1.0.3",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}

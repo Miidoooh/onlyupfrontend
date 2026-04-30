@@ -1,0 +1,28 @@
+node_modules/
+dist/
+.next/
+out/
+cache/
+broadcast/
+lib/
+coverage/
+.env
+.env.*
+!.env.example
+*.local
+*.log
+*.checkpoint
+.checkpoint*
+lcov.info
+
+# Stray TS build artifacts that escape outDir
+packages/*/src/**/*.js
+packages/*/src/**/*.d.ts
+packages/*/src/**/*.js.map
+packages/*/src/**/*.d.ts.map
+apps/*/src/**/*.d.ts.map
+apps/*/src/**/*.js.map
+
+# Foundry / Vercel local outputs
+.vercel
+contracts/out/

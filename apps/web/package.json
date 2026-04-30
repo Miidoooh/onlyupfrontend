@@ -1,0 +1,38 @@
+{
+  "name": "@bounty/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@bounty/shared": "0.1.0",
+    "@coinbase/wallet-sdk": "^4.3.7",
+    "@metamask/connect-evm": "^1.0.0",
+    "@reown/appkit": "^1.8.19",
+    "@reown/appkit-adapter-wagmi": "^1.8.19",
+    "@tanstack/react-query": "^5.100.6",
+    "@uniswap/universal-router-sdk": "^5.1.0",
+    "@uniswap/v4-sdk": "^2.0.0",
+    "@vercel/analytics": "^1.6.1",
+    "@walletconnect/ethereum-provider": "^2.23.9",
+    "accounts": "^0.8.6",
+    "next": "^14.2.3",
+    "porto": "^0.2.37",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "viem": "^2.13.3",
+    "wagmi": "^3.6.8"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.2",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}
