@@ -68,3 +68,91 @@ If fee/tick/hook/token don’t match the deployed `PoolKey`, the v4 quoter retur
 ## Investor-facing Uniswap
 
 On **Sepolia**, the production Uniswap web app may not list every v4 pool. Investors may need **your official pool link**, embedded **pool id / pool key**, or a **mainnet** deployment for full discoverability. Document the exact **chain id**, **token address**, and **pool parameters** you support.
+
+## Mainnet launch checklist
+
+Everything that needs to flip when going from Sepolia to mainnet. Nothing is hardcoded to Sepolia anymore — every chain-specific value reads from env / `block.chainid`.
+
+### 1. Rotate keys
+
+The Sepolia `PRIVATE_KEY` in `.env` was used in chat / screenshots / git diffs. **Generate a new wallet for mainnet.** Send only the gas you need, and store the key in a password manager / hardware wallet.
+
+### 2. `.env` for mainnet
+
+```bash
+CHAIN_ID=1
+RPC_HTTP_URL=https://ethereum-rpc.publicnode.com   # or your own paid RPC
+RPC_WS_URL=
+
+# Filled by `npm run deploy` automatically.
+BOUNTY_HOOK_ADDRESS=
+BOUNTY_TOKEN_ADDRESS=
+REAL_V4_HOOK_ADDRESS=
+POLICY_ADDRESS=
+
+# Pool key — set after you create the pool through the Uniswap mainnet UI.
+POOL_ID=
+V4_FEE=10000
+V4_TICK_SPACING=200
+
+# v4 mainnet defaults (DeployFreshNativeEthLaunch already knows these; only
+# override if Uniswap publishes new addresses).
+# V4_POOL_MANAGER=0x000000000004444c5dc75cB358380D2e3dE08A90
+# V4_POSITION_MANAGER=0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e
+# UNIVERSAL_ROUTER=0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af
+
+PRIVATE_KEY=0x...
+ETHERSCAN_API_KEY=...
+
+# Web — same chain, mirrored env so the swap panel matches your PoolKey.
+NEXT_PUBLIC_CHAIN_ID=1
+NEXT_PUBLIC_RPC_HTTP_URL=https://ethereum-rpc.publicnode.com
+NEXT_PUBLIC_BOUNTY_TOKEN_ADDRESS=
+NEXT_PUBLIC_REAL_V4_HOOK_ADDRESS=
+NEXT_PUBLIC_BOUNTY_HOOK_ADDRESS=
+NEXT_PUBLIC_V4_POOL_FEE=10000
+NEXT_PUBLIC_V4_TICK_SPACING=200
+NEXT_PUBLIC_API_URL=https://api.your-host  # or http://localhost:4311 if you self-host
+```
+
+### 3. Deploy
+
+```bash
+npm run deploy        # builds, tests, broadcasts, syncs .env
+# OR
+npm run deploy:verify # same + Etherscan verify (needs ETHERSCAN_API_KEY)
+```
+
+`DeployFreshNativeEthLaunch` reads `block.chainid`. Chain id `1` ⇒ uses **mainnet** PoolManager / PositionManager / Permit2 / UniversalRouter constants. Chain id anything else ⇒ Sepolia constants. Per-address overrides via env still win if you deploy on an L2.
+
+### 4. Create pool + add liquidity
+
+On the Uniswap **mainnet** UI:
+
+- **currency0** = `0x0000000000000000000000000000000000000000` (native ETH)
+- **currency1** = `BOUNTY_TOKEN_ADDRESS` from `.env`
+- **fee** = `10000` (1%) — must match `V4_FEE`
+- **tickSpacing** = `200` — must match `V4_TICK_SPACING`
+- **hooks** = `REAL_V4_HOOK_ADDRESS` from `.env`
+
+After the pool exists, paste the printed `PoolId` into `.env` as `POOL_ID`, then:
+
+```bash
+forge script script/ConfigureNativeEthV4Route.s.sol:ConfigureNativeEthV4Route \
+  --broadcast --rpc-url $RPC_HTTP_URL
+```
+
+(run from `contracts/`). This calls `core.configurePool` and `hook.configureRoute` so the bounty mechanism activates for that pool.
+
+### 5. Worker / API hosting
+
+`apps/api` and `apps/worker` are stateless Node apps. Any Render / Fly / Railway / VPS works. Set the same `.env`, expose `apps/api` on a public URL, and update `NEXT_PUBLIC_API_URL` on Vercel.
+
+### 6. Verify everything is green
+
+```bash
+npm run doctor        # full system check across .env, RPC, contracts, API, worker
+npm run check-quote   # confirms v4 quoter accepts swaps for your PoolKey
+```
+
+If both pass, the dashboard is live, the swap panel routes, and the indexer is ingesting bounty events.

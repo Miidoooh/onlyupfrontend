@@ -44,6 +44,13 @@ contract DeployFreshNativeEthLaunch {
     uint160 private constant HOOK_FLAGS = Hooks.AFTER_SWAP_FLAG;
     uint256 private constant DEFAULT_MIN_DUMP_AMOUNT = 10 ether;
 
+    struct V4Addresses {
+        address poolManager;
+        address positionManager;
+        address permit2;
+        address universalRouter;
+    }
+
     event FreshLaunchReady(
         address indexed token,
         address indexed core,
@@ -70,15 +77,8 @@ contract DeployFreshNativeEthLaunch {
         string memory symbol = _envStringOr("TOKEN_SYMBOL", "UP");
         uint256 minDumpAmount = _envUintOr("MIN_DUMP_AMOUNT", DEFAULT_MIN_DUMP_AMOUNT);
 
-        // Resolve chain-specific Uniswap v4 addresses. block.chainid == 1 is
-        // mainnet; everything else falls back to the Sepolia constants. Each
-        // can also be overridden individually via env (V4_POOL_MANAGER, etc.)
-        // for L2s or testnets the script doesn't know about.
-        bool isMainnet = block.chainid == 1;
-        address poolManager     = _envAddressOr("V4_POOL_MANAGER",     isMainnet ? MAINNET_POOL_MANAGER     : SEPOLIA_POOL_MANAGER);
-        address positionManager = _envAddressOr("V4_POSITION_MANAGER", isMainnet ? MAINNET_POSITION_MANAGER : SEPOLIA_POSITION_MANAGER);
-        address permit2         = _envAddressOr("PERMIT2_ADDRESS",     isMainnet ? MAINNET_PERMIT2          : SEPOLIA_PERMIT2);
-        address universalRouter = _envAddressOr("UNIVERSAL_ROUTER",    isMainnet ? MAINNET_UNIVERSAL_ROUTER : SEPOLIA_UNIVERSAL_ROUTER);
+        // Chain-specific Uniswap v4 addresses (struct keeps locals < stack depth).
+        V4Addresses memory v4 = _resolveV4Addresses();
 
         vm.startBroadcast(privateKey);
 
@@ -100,21 +100,23 @@ contract DeployFreshNativeEthLaunch {
             minDumpAmount
         );
 
-        bytes memory constructorArgs = abi.encode(IPoolManager(poolManager), address(core), owner);
-        (address hookAddress, bytes32 salt) =
-            HookMiner.find(CREATE2_DEPLOYER, HOOK_FLAGS, type(BountyV4Hook).creationCode, constructorArgs);
+        {
+            bytes memory constructorArgs = abi.encode(IPoolManager(v4.poolManager), address(core), owner);
+            (address hookAddress, bytes32 salt) =
+                HookMiner.find(CREATE2_DEPLOYER, HOOK_FLAGS, type(BountyV4Hook).creationCode, constructorArgs);
 
-        hook = new BountyV4Hook{salt: salt}(IPoolManager(poolManager), address(core), owner);
-        require(address(hook) == hookAddress, "hook address mismatch");
+            hook = new BountyV4Hook{salt: salt}(IPoolManager(v4.poolManager), address(core), owner);
+            require(address(hook) == hookAddress, "hook address mismatch");
+        }
 
         policy.setHook(address(core));
         core.setReporter(address(hook));
 
         // Limit exemptions so v4 routers/managers can move the token while wallet is gated by maxTx.
-        token.setLimitExempt(poolManager, true);
-        token.setLimitExempt(positionManager, true);
-        token.setLimitExempt(permit2, true);
-        token.setLimitExempt(universalRouter, true);
+        token.setLimitExempt(v4.poolManager, true);
+        token.setLimitExempt(v4.positionManager, true);
+        token.setLimitExempt(v4.permit2, true);
+        token.setLimitExempt(v4.universalRouter, true);
         token.setLimitExempt(address(core), true);
         token.setLimitExempt(address(hook), true);
 
@@ -148,5 +150,13 @@ contract DeployFreshNativeEthLaunch {
         } catch {
             return fallbackValue;
         }
+    }
+
+    function _resolveV4Addresses() private returns (V4Addresses memory v4) {
+        bool isMainnet = block.chainid == 1;
+        v4.poolManager     = _envAddressOr("V4_POOL_MANAGER",     isMainnet ? MAINNET_POOL_MANAGER     : SEPOLIA_POOL_MANAGER);
+        v4.positionManager = _envAddressOr("V4_POSITION_MANAGER", isMainnet ? MAINNET_POSITION_MANAGER : SEPOLIA_POSITION_MANAGER);
+        v4.permit2         = _envAddressOr("PERMIT2_ADDRESS",     isMainnet ? MAINNET_PERMIT2          : SEPOLIA_PERMIT2);
+        v4.universalRouter = _envAddressOr("UNIVERSAL_ROUTER",    isMainnet ? MAINNET_UNIVERSAL_ROUTER : SEPOLIA_UNIVERSAL_ROUTER);
     }
 }
