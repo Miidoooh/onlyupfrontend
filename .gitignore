@@ -31,3 +31,4 @@ apps/*/src/**/*.js.map
 # Foundry / Vercel local outputs
 .vercel
 contracts/out/
+#TS build artifacts
