@@ -182,10 +182,39 @@ async function setup(
 
   /* ---- transfer $UP to each wallet ---- */
   const upAmount = parseUnits(CONFIG.startBalanceUp, 18);
-  const operatorBalance = await publicClient.readContract({
+  let operatorBalance = await publicClient.readContract({
     address: ADDR.TOKEN, abi: tokenAbi, functionName: "balanceOf", args: [ADDR.OPERATOR]
   });
   console.log(`  operator $UP     ${fmtUp(operatorBalance)} UP`);
+
+  // If operator has < (wallets * upAmount), bootstrap by impersonating the v4
+  // PoolManager (which holds all LP'd UP) and pulling tokens to operator.
+  // PoolManager is in isLimitExempt → token transfer bypasses anti-whale limits.
+  const needTotal = upAmount * BigInt(wallets.length);
+  if (operatorBalance < needTotal) {
+    process.stdout.write(`  bootstrap $UP    `);
+    const pmBalance = await publicClient.readContract({
+      address: ADDR.TOKEN, abi: tokenAbi, functionName: "balanceOf", args: [ADDR.POOL_MANAGER]
+    });
+    if (pmBalance === 0n) {
+      throw new Error(`PoolManager ${ADDR.POOL_MANAGER} has 0 UP. Add liquidity first or run after a real LP add.`);
+    }
+    const pull = pmBalance < needTotal ? pmBalance : needTotal * 2n;
+    await testClient.impersonateAccount({ address: ADDR.POOL_MANAGER });
+    await testClient.setBalance({ address: ADDR.POOL_MANAGER, value: parseEther("1") });
+    const pmClient = createWalletClient({
+      account: ADDR.POOL_MANAGER, chain: anvilSepolia, transport: http(CONFIG.anvilRpc)
+    });
+    const hash = await pmClient.writeContract({
+      address: ADDR.TOKEN, abi: tokenAbi, functionName: "transfer", args: [ADDR.OPERATOR, pull]
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
+    await testClient.stopImpersonatingAccount({ address: ADDR.POOL_MANAGER });
+    operatorBalance = await publicClient.readContract({
+      address: ADDR.TOKEN, abi: tokenAbi, functionName: "balanceOf", args: [ADDR.OPERATOR]
+    });
+    console.log(c(`✓ ${fmtUp(operatorBalance)} UP (impersonated PoolManager)`, "green"));
+  }
 
   process.stdout.write(`  transfer $UP     `);
   for (const w of wallets) {

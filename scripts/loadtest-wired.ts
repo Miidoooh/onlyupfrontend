@@ -152,8 +152,8 @@ async function main() {
     "--chain-id",  "11155111",
     "--port",      String(ANVIL_PORT),
     "--accounts",  "20",
-    "--balance",   "10000",
-    "--block-time", "0"
+    "--balance",   "10000"
+    // omit --block-time → anvil auto-mines on every tx (perfect for load test)
   ], { stdio: ["ignore", "pipe", "pipe"], detached: false });
   anvil.stdout?.pipe(anvilLogStream);
   anvil.stderr?.pipe(anvilLogStream);
@@ -174,12 +174,19 @@ async function main() {
   log(".env patched", `RPC_HTTP_URL=${ANVIL_RPC}  startBlock=${forkBlock - 5}  poll=2000ms`);
 
   // 5. Boot API + worker against the fork
-  const npmBin = platform() === "win32" ? "npm.cmd" : "npm";
-  log("starting api", "npm run dev:api");
-  api = spawn(npmBin, ["run", "dev:api"], { cwd: repoRoot, stdio: "ignore", shell: false });
+  // On Windows, .cmd shims need shell:true to spawn correctly.
+  const isWin = platform() === "win32";
+  const npmBin = isWin ? "npm.cmd" : "npm";
+  const apiLog    = (await import("node:fs")).createWriteStream(resolve(repoRoot, "api.log"),    { flags: "w" });
+  const workerLog = (await import("node:fs")).createWriteStream(resolve(repoRoot, "worker.log"), { flags: "w" });
 
-  log("starting worker", "npm run dev:worker");
-  worker = spawn(npmBin, ["run", "dev:worker"], { cwd: repoRoot, stdio: "ignore", shell: false });
+  log("starting api", "npm run dev:api  (logs → api.log)");
+  api = spawn(npmBin, ["run", "dev:api"], { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"], shell: isWin });
+  api.stdout?.pipe(apiLog); api.stderr?.pipe(apiLog);
+
+  log("starting worker", "npm run dev:worker  (logs → worker.log)");
+  worker = spawn(npmBin, ["run", "dev:worker"], { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"], shell: isWin });
+  worker.stdout?.pipe(workerLog); worker.stderr?.pipe(workerLog);
 
   // give them time to boot + connect
   await new Promise((r) => setTimeout(r, 6000));
@@ -192,7 +199,7 @@ async function main() {
   const loadtest = spawnSync(npmBin, ["run", "loadtest"], {
     cwd: repoRoot,
     stdio: "inherit",
-    shell: false,
+    shell: isWin,
     env: { ...process.env, ANVIL_RPC_URL: ANVIL_RPC }
   });
 
