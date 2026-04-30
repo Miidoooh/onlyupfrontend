@@ -14,6 +14,10 @@ coverage/
 .env
 .env.*
 !.env.example
+# Vercel reads this at build time. It only contains NEXT_PUBLIC_* values which
+# are baked into the client bundle anyway, so it's safe to track. Auto-written
+# by `npm run launch` and `npm run launch:wire-pool`.
+!apps/web/.env.production
 *.local
 *.log
 *.checkpoint

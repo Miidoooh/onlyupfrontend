@@ -158,5 +158,15 @@ contract DeployFreshNativeEthLaunch {
         v4.positionManager = _envAddressOr("V4_POSITION_MANAGER", isMainnet ? MAINNET_POSITION_MANAGER : SEPOLIA_POSITION_MANAGER);
         v4.permit2         = _envAddressOr("PERMIT2_ADDRESS",     isMainnet ? MAINNET_PERMIT2          : SEPOLIA_PERMIT2);
         v4.universalRouter = _envAddressOr("UNIVERSAL_ROUTER",    isMainnet ? MAINNET_UNIVERSAL_ROUTER : SEPOLIA_UNIVERSAL_ROUTER);
+
+        // Sanity-gate to prevent the Sepolia-PoolManager-on-mainnet bug. The hook
+        // bakes IPoolManager into immutable state — wrong here means the hook is
+        // permanently bricked and every swap reverts in afterSwap.
+        if (isMainnet && v4.poolManager != MAINNET_POOL_MANAGER) {
+            revert("V4_POOL_MANAGER mismatch: chainid 1 requires mainnet PM 0x000000000004444c5dc75cB358380D2e3dE08A90");
+        }
+        if (block.chainid == 11155111 && v4.poolManager != SEPOLIA_POOL_MANAGER) {
+            revert("V4_POOL_MANAGER mismatch: chainid 11155111 requires sepolia PM 0xE03A1074c86CFeDd5C142C4F04F1a1536e203543");
+        }
     }
 }

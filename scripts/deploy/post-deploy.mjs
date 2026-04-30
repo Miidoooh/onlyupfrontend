@@ -27,6 +27,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { syncVercelEnv } from "./sync-vercel-env.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
@@ -159,10 +160,40 @@ const isWin = process.platform === "win32";
 const npmBin = isWin ? "npm.cmd" : "npm";
 spawnSync(npmBin, ["run", "doctor"], { cwd: repoRoot, stdio: "inherit", shell: isWin });
 
+// ---- 5. Auto-sync apps/web/.env.production + push so Vercel redeploys ----
+const noPush = process.argv.includes("--no-push");
+console.log(`\n▲ syncing apps/web/.env.production for Vercel`);
+const sync = syncVercelEnv({
+  push: !noPush,
+  commitMessage: `chore(web): wire pool ${poolId.slice(0, 10)}… into NEXT_PUBLIC_*`
+});
+if (!sync.changed) {
+  console.log("  · already up to date");
+} else {
+  console.log(`  ✓ wrote ${path.relative(repoRoot, sync.file)}`);
+  if (noPush) {
+    console.log("  · git push skipped (--no-push)");
+  } else if (sync.pushed) {
+    console.log(`  ✓ pushed ${sync.sha} → Vercel will auto-redeploy`);
+  } else {
+    console.log(`  ⚠ git push skipped: ${sync.reason}`);
+    console.log("    Run manually:  git add apps/web/.env.production && git commit -m \"sync\" && git push");
+  }
+}
+
 console.log(`
+══════════════════════════════════════════════════════════════
+  IF YOUR WORKER IS RUNNING — restart it so it picks up the
+  cleared checkpoint and re-scans from WORKER_START_BLOCK:
+
+    Ctrl+C the dev:worker terminal, then:
+      npm run dev:worker
+
+══════════════════════════════════════════════════════════════
+
 ✓ Post-deploy complete.
-  → Make sure apps/api + apps/worker are running (locally or on a host).
-  → Push the same NEXT_PUBLIC_* values to Vercel and redeploy.
-  → People can now swap on Uniswap (or your /buy panel) and the dashboard
-    will reflect bounty events within ~12 s.
+
+  Make a sell of ≥ 10 UP on the pool. Within ~12s you should see
+  BountyOpened + BountyFunded in /events and the dashboard.
+  Buys made during the next 50 blocks split that bounty.
 `);

@@ -15,9 +15,29 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
+const envPath = path.join(repoRoot, ".env");
 
-const chainId = process.env.CHAIN_ID ?? "11155111";
+/** Parse a key from .env file directly (no fallback to shell env, which can be stale). */
+function readEnvFile(key) {
+  if (!fs.existsSync(envPath)) return undefined;
+  for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (m && m[1] === key) return (m[2] ?? "").replace(/^["']|["']$/g, "");
+  }
+  return undefined;
+}
+
+const chainId = readEnvFile("CHAIN_ID") ?? process.env.CHAIN_ID;
+if (!chainId) {
+  console.error("✗ CHAIN_ID missing from .env. Cannot pick the right broadcast folder.");
+  console.error("  Set CHAIN_ID in .env (1 = mainnet, 11155111 = sepolia).");
+  process.exit(1);
+}
+
 const scriptFile = process.argv[2] ?? "DeployFreshNativeEthLaunch.s.sol";
+
+const v4Fee = readEnvFile("V4_FEE") ?? "3000";
+const v4TickSpacing = readEnvFile("V4_TICK_SPACING") ?? "60";
 
 const broadcastPath = path.join(
   repoRoot,
@@ -80,7 +100,6 @@ if (firstBlock > 0) {
   updates.WORKER_START_BLOCK = String(Math.max(0, firstBlock - 5));
 }
 
-const envPath = path.join(repoRoot, ".env");
 let lines = [];
 if (fs.existsSync(envPath)) {
   lines = fs.readFileSync(envPath, "utf8").split(/\r?\n/);
@@ -115,10 +134,18 @@ if (fs.existsSync(checkpoint)) {
 
 console.log(`
 Next:
-  1. (optional) Add liquidity to a Uniswap v4 pool with currency0=ETH (0x0), currency1=${deployed.BountyLaunchToken}.
-     - With our hook:    fee=10000, tickSpacing=200, hooks=${deployed.BountyV4Hook}
-     - Without our hook: fee=any,   tickSpacing=any,  hooks=0x0  (works in stock Uniswap UI)
-  2. Once the pool exists and you know its PoolId, set POOL_ID in .env, then:
+  1. Create a Uniswap v4 pool:
+       currency0    ETH (0x0000…0000)
+       currency1    ${deployed.BountyLaunchToken}
+       fee          ${v4Fee}
+       tickSpacing  ${v4TickSpacing}
+       hooks        ${deployed.BountyV4Hook}
+     Add initial liquidity, then copy the resulting PoolId.
+
+  2. Wire the pool into the bounty system:
+       npm run launch:wire-pool -- 0x<POOL_ID>
+
+  3. Spin up the stack (or your hosted equivalents):
        npm run dev:api
        npm run dev:worker
        npm run dev:web
