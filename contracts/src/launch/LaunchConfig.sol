@@ -3,7 +3,8 @@ pragma solidity ^0.8.24;
 
 library LaunchConfig {
     uint256 internal constant DEFAULT_SUPPLY = 1_000_000_000 ether;
-    uint16 internal constant MAX_LAUNCH_LIMIT_BPS = 100;
+    /// @dev 2 % of supply for both maxTxAmount and maxWalletAmount at launch.
+    uint16 internal constant MAX_LAUNCH_LIMIT_BPS = 200;
     uint16 internal constant BASE_BOUNTY_BPS = 500;
     uint16 internal constant MAX_DYNAMIC_BOUNTY_BPS = 1_000;
     uint64 internal constant BOUNTY_WINDOW_BLOCKS = 50;

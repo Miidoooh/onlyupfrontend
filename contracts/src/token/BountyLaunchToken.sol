@@ -1,4 +1,22 @@
 // SPDX-License-Identifier: MIT
+
+
+/* https://x.com/onlyupv4
+   https://t.me/onlyupv4
+   https://onlyupv4.xyz
+
+   OnlyUp is the only token where dumps dont hurt the chart, dumps print. 
+   
+   Whales sell, the v4 hook skims dynamically a 5.00% - 10.00% fee, 
+   the next apes split that bag.
+
+   With the help of V4 hooks the team has developed a new innovative tokenomics 
+   where volume pays the buyers in a whole new way. Check the website for a more 
+   detailed information...
+
+
+
+*/
 pragma solidity ^0.8.24;
 
 import {LaunchConfig} from "../launch/LaunchConfig.sol";
@@ -51,7 +69,8 @@ contract BountyLaunchToken {
         symbol = tokenSymbol;
         owner = initialOwner;
         totalSupply = LaunchConfig.DEFAULT_SUPPLY;
-        maxTxAmount = (totalSupply * LaunchConfig.MAX_LAUNCH_LIMIT_BPS) / 20_000; // 2% max buy
+        // bps math: 200 / 10_000 = 2 % of supply at launch.
+        maxTxAmount = (totalSupply * LaunchConfig.MAX_LAUNCH_LIMIT_BPS) / 10_000;
         maxWalletAmount = maxTxAmount;
 
         isLimitExempt[initialOwner] = true;

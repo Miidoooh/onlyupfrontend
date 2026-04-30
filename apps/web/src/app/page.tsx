@@ -102,7 +102,7 @@ export default async function Home() {
           { label: "WINDOW", value: isActive ? `${blocks} BLOCKS` : "REARMING" },
           { label: "TG", value: botHealth.telegramMode.toUpperCase() },
           { label: "X", value: botHealth.twitterMode.toUpperCase() },
-          { label: "MAX BUY", value: "1%" },
+          { label: "MAX BUY", value: "2%" },
           { label: "RUNS ON", value: "v4 HOOK" }
         ]}
       />
@@ -272,12 +272,12 @@ export default async function Home() {
         <div className="tokenomics">
           <article className="token-tile">
             <span className="check">✓</span>
-            <h4>1% MAX BUY</h4>
+            <h4>2% MAX BUY</h4>
             <p>No bots, no sniper rugs. Same cap on every wallet.</p>
           </article>
           <article className="token-tile">
             <span className="check">✓</span>
-            <h4>1% MAX WALLET</h4>
+            <h4>2% MAX WALLET</h4>
             <p>Whales can't farm the bag harder than you can.</p>
           </article>
           <article className="token-tile">

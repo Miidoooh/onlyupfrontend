@@ -21,10 +21,10 @@ contract BountyLaunchTokenTest {
         token = new BountyLaunchToken("Bounty Hook", "BHOOK", OWNER, TREASURY);
     }
 
-    function testInitialSupplyAndOnePercentLimits() public view {
+    function testInitialSupplyAndTwoPercentLimits() public view {
         require(token.totalSupply() == 1_000_000_000 ether, "supply");
-        require(token.maxTxAmount() == 10_000_000 ether, "max tx");
-        require(token.maxWalletAmount() == 10_000_000 ether, "max wallet");
+        require(token.maxTxAmount() == 20_000_000 ether, "max tx");
+        require(token.maxWalletAmount() == 20_000_000 ether, "max wallet");
     }
 
     function testTradingGateBlocksNonExemptTransfers() public {
