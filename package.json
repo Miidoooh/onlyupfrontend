@@ -32,7 +32,8 @@
     "loadtest:typecheck": "tsc -p scripts/loadtest/tsconfig.json --noEmit",
     "doctor": "tsx scripts/loadtest/doctor.ts",
     "find-pool": "node scripts/find-pool.mjs",
-    "check-quote": "node scripts/check-quote.mjs"
+    "check-quote": "node scripts/check-quote.mjs",
+    "loadtest:wired": "tsx scripts/loadtest-wired.ts"
   },
   "engines": {
     "node": ">=20.11.0",
