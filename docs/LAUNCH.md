@@ -138,34 +138,46 @@ npm run verify
 
 `DeployFreshNativeEthLaunch` reads `block.chainid`. Chain id `1` ⇒ uses **mainnet** PoolManager / PositionManager / Permit2 / UniversalRouter constants. Chain id anything else ⇒ Sepolia constants. Per-address overrides via env still win if you deploy on an L2.
 
-### 4. Create pool + add liquidity
+### 4. Create pool + add liquidity (manual, on Uniswap)
 
 On the Uniswap **mainnet** UI:
 
 - **currency0** = `0x0000000000000000000000000000000000000000` (native ETH)
 - **currency1** = `BOUNTY_TOKEN_ADDRESS` from `.env`
-- **fee** = `10000` (1%) — must match `V4_FEE`
-- **tickSpacing** = `200` — must match `V4_TICK_SPACING`
+- **fee** = whatever you want (`10000` = 1%, `3000` = 0.3%, etc.) — note the value
+- **tickSpacing** = matching ticks (`200` for fee 10000, `60` for fee 3000) — note the value
 - **hooks** = `REAL_V4_HOOK_ADDRESS` from `.env`
 
-After the pool exists, paste the printed `PoolId` into `.env` as `POOL_ID`, then:
+Add liquidity in-range so the v4 quoter actually returns a quote. Copy the **PoolId** that the UI shows.
+
+### 5. Flip the bounty switch + sync everything
+
+Run **one command** with the pool id and the fee/tick you used:
 
 ```bash
-forge script script/ConfigureNativeEthV4Route.s.sol:ConfigureNativeEthV4Route \
-  --broadcast --rpc-url $RPC_HTTP_URL
+npm run post-deploy -- 0xYOUR_POOL_ID --fee 3000 --tick 60
 ```
 
-(run from `contracts/`). This calls `core.configurePool` and `hook.configureRoute` so the bounty mechanism activates for that pool.
+This script:
 
-### 5. Worker / API hosting
+1. Writes `POOL_ID`, `V4_FEE`, `V4_TICK_SPACING`, `NEXT_PUBLIC_V4_POOL_FEE`, `NEXT_PUBLIC_V4_TICK_SPACING` into root `.env`.
+2. Broadcasts `ConfigureNativeEthV4Route.s.sol` — calls `core.configurePool(...)` and `hook.configureRoute(...)`. **This is the on-chain step that turns bounty events on for your pool.** Until you run it, `BountyV4Hook._afterSwap` just emits `V4HookSkipped(SKIP_ROUTE_DISABLED)` for every swap; trades succeed but the dashboard stays empty.
+3. Resets `apps/worker/.checkpoint` so the indexer re-scans from your deploy block.
+4. Runs `npm run doctor` for a green-light read of the whole stack.
 
-`apps/api` and `apps/worker` are stateless Node apps. Any Render / Fly / Railway / VPS works. Set the same `.env`, expose `apps/api` on a public URL, and update `NEXT_PUBLIC_API_URL` on Vercel.
+### 6. Worker / API hosting
 
-### 6. Verify everything is green
+`apps/api` and `apps/worker` are stateless Node apps. Any Render / Fly / Railway / VPS works. Set the same `.env`, expose `apps/api` on a public URL, and update `NEXT_PUBLIC_API_URL` on Vercel. Without this, the live feed / leaderboard sections of the website show empty (the swap panel itself still works because it talks to RPC + Universal Router directly).
+
+### 7. Vercel
+
+Push the `NEXT_PUBLIC_*` values from `.env` into the Vercel project's environment variables UI, then redeploy. **Do NOT** push `PRIVATE_KEY`, `ETHERSCAN_API_KEY`, or `WORKER_INGEST_SECRET`.
+
+### 8. Verify everything is green
 
 ```bash
 npm run doctor        # full system check across .env, RPC, contracts, API, worker
 npm run check-quote   # confirms v4 quoter accepts swaps for your PoolKey
 ```
 
-If both pass, the dashboard is live, the swap panel routes, and the indexer is ingesting bounty events.
+If both pass, the dashboard is live, the swap panel routes, and the indexer is ingesting bounty events. People can swap on Uniswap (or your /buy panel); the website updates within ~12 s.
