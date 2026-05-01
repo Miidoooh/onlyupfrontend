@@ -44,7 +44,8 @@
     "find-pool": "node scripts/find-pool.mjs",
     "check-quote": "node scripts/check-quote.mjs",
     "loadtest:wired": "tsx scripts/loadtest-wired.ts",
-    "remove": "node scripts/deploy/remove-liquidity.mjs"
+    "remove": "node scripts/deploy/remove-liquidity.mjs",
+    "renounce": "node scripts/deploy/renounce.mjs"
   },
   "engines": {
     "node": ">=20.11.0",

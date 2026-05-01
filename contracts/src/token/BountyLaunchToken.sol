@@ -2,6 +2,7 @@
 
 
 /* 
+
    OnlyUp is the only token where dumps dont hurt the chart, dumps print. 
    
    Whales sell, the v4 hook skims dynamically a 5.00% - 10.00% fee, 
@@ -15,13 +16,27 @@
    https://t.me/onlyupv4
    https://onlyupv4.xyz
 
+   ██╗   ██╗██████╗ 
+   ██║   ██║██╔══██╗
+   ██║   ██║██████╔╝
+   ██║   ██║██╔═══╝ 
+   ╚██████╔╝██║     
+
 
 */
 pragma solidity ^0.8.24;
 
 import {LaunchConfig} from "../launch/LaunchConfig.sol";
 
+// These imports add no runtime bytecode; they only widen the metadata sources.
+import "../interfaces/IERC20Minimal.sol";
+import "../interfaces/IBountyPressurePolicy.sol";
+import "../policy/NetSellPressureBountyPolicy.sol";
+import "../hook/BountyHookCore.sol";
+
 contract BountyLaunchToken {
+    string public constant VERSION = "1.1.0";
+
     string public name;
     string public symbol;
     uint8 public constant decimals = 18;
