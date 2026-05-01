@@ -9,7 +9,12 @@
  *   - Prints the exact PoolKey to use on Uniswap, copy-paste ready.
  *
  * Usage:
- *   npm run launch
+ *   npm run launch                  # incremental deploy, reuses existing addresses if present
+ *   npm run launch -- --fresh       # wipe all launch-specific state in .env, indexer checkpoint,
+ *                                   # and the auto-generated apps/web/.env.production, then
+ *                                   # deploy from scratch. Operational config (RPC, key, fee,
+ *                                   # tick, NEXT_PUBLIC_API_URL, bot tokens) is preserved.
+ *   npm run launch:fresh            # alias for `npm run launch -- --fresh`
  *
  * After it succeeds, create the Uniswap pool + add liquidity manually, then:
  *   npm run launch:wire-pool -- 0x<POOL_ID>
@@ -150,10 +155,70 @@ function runStep(label, cmd, args) {
   }
 }
 
+/**
+ * --fresh: wipe every value that the deploy script will produce, plus the
+ * worker checkpoint and the auto-generated Vercel env file, so the next
+ * deploy starts from a clean slate. Anything operational (RPC, keys, fee,
+ * tick, API URL, bot creds) is preserved.
+ */
+function freshen() {
+  const launchKeys = [
+    "BOUNTY_HOOK_ADDRESS",
+    "BOUNTY_TOKEN_ADDRESS",
+    "REAL_V4_HOOK_ADDRESS",
+    "POLICY_ADDRESS",
+    "POOL_ID",
+    "LEGACY_POOL_ID",
+    "LEGACY_V4_FEE",
+    "LEGACY_V4_TICK_SPACING",
+    "WORKER_START_BLOCK",
+    "NEXT_PUBLIC_BOUNTY_TOKEN_ADDRESS",
+    "NEXT_PUBLIC_REAL_V4_HOOK_ADDRESS",
+    "NEXT_PUBLIC_BOUNTY_HOOK_ADDRESS"
+  ];
+
+  const before = readEnvFile();
+  const blanked = launchKeys.filter((k) => before[k]);
+
+  patchEnv({ updates: Object.fromEntries(launchKeys.map((k) => [k, ""])) });
+
+  // Worker checkpoint — re-indexing from scratch starts at WORKER_START_BLOCK
+  // (which the deploy script will set to the new launch block).
+  const checkpointFile = path.join(repoRoot, before.WORKER_CHECKPOINT_FILE || "apps/worker/.checkpoint");
+  let checkpointDeleted = false;
+  if (fs.existsSync(checkpointFile)) {
+    fs.rmSync(checkpointFile);
+    checkpointDeleted = true;
+  }
+
+  // Auto-generated Vercel env file — sync-vercel-env.mjs will rewrite it after
+  // the deploy with the new addresses. Removing it now means the post-deploy
+  // sync is guaranteed to commit a real diff and trigger a Vercel rebuild.
+  const vercelEnvFile = path.join(repoRoot, "apps", "web", ".env.production");
+  let vercelEnvDeleted = false;
+  if (fs.existsSync(vercelEnvFile)) {
+    fs.rmSync(vercelEnvFile);
+    vercelEnvDeleted = true;
+  }
+
+  console.log(c("\n▲ --fresh: wiped launch state", "yellow"));
+  if (blanked.length > 0) {
+    console.log(c(`    .env keys cleared (${blanked.length}):`, "dim"));
+    for (const k of blanked) console.log(c(`      · ${k}=${before[k].length > 14 ? before[k].slice(0, 12) + "…" : before[k]}`, "dim"));
+  } else {
+    console.log(c("    .env had no launch addresses to clear", "dim"));
+  }
+  console.log(c(`    worker checkpoint     ${checkpointDeleted ? "deleted (" + path.relative(repoRoot, checkpointFile) + ")" : "absent"}`, "dim"));
+  console.log(c(`    apps/web/.env.production ${vercelEnvDeleted ? "deleted (will be regenerated)" : "absent"}`, "dim"));
+}
+
 function main() {
   console.log(c("\n╔══════════════════════════════════════════════════════╗", "cyan"));
   console.log(c("║          BOUNTY HOOK — ONE-SHOT LAUNCH               ║", "cyan"));
   console.log(c("╚══════════════════════════════════════════════════════╝", "cyan"));
+
+  const fresh = process.argv.includes("--fresh");
+  if (fresh) freshen();
 
   const { env, chainId, isMainnet } = preflight();
   console.log(c(`\n▲ pre-flight ok`, "green"));
@@ -161,6 +226,7 @@ function main() {
   console.log(`    rpc          ${env.RPC_HTTP_URL}`);
   console.log(`    deployer     forge will derive from PRIVATE_KEY`);
   console.log(`    verify       yes (Etherscan)`);
+  console.log(`    mode         ${fresh ? c("FRESH (wiped state)", "yellow") : "incremental"}`);
 
   // forge build + test + broadcast + sync-env + verify in one shot
   runStep(
@@ -197,20 +263,31 @@ function main() {
   console.log(c("║            DEPLOY OK — NEXT: CREATE POOL             ║", "green"));
   console.log(c("╚══════════════════════════════════════════════════════╝", "green"));
 
-  console.log(`\n${c("Open Uniswap → Create v4 pool with this exact PoolKey:", "bold")}\n`);
+  console.log(`\n${c("STEP 1 — Open Uniswap → Create v4 pool with this exact PoolKey:", "bold")}\n`);
   console.log(`    currency0     ETH (${c("0x0000000000000000000000000000000000000000", "dim")})`);
   console.log(`    currency1     ${c(post.BOUNTY_TOKEN_ADDRESS, "yellow")}   (UP)`);
   console.log(`    fee           ${c(fee, "yellow")}`);
   console.log(`    tickSpacing   ${c(tick, "yellow")}`);
   console.log(`    hooks         ${c(post.REAL_V4_HOOK_ADDRESS, "yellow")}`);
-  console.log("\n  → Initialize price, add ETH + UP liquidity, copy the resulting PoolId.\n");
-  console.log(`${c("Then run:", "bold")}\n`);
+  console.log("\n    Initialize price, add ETH + UP liquidity, copy the resulting PoolId.\n");
+
+  console.log(`${c("STEP 2 — Wire the pool into the bounty system:", "bold")}\n`);
   console.log(`    ${c("npm run launch:wire-pool -- 0x<POOL_ID>", "cyan")}\n`);
+
+  console.log(`${c("STEP 3 — Restart local services so they pick up the new addresses:", "bold")}\n`);
+  console.log(`    ${c("npm run dev:all", "cyan")}    ${c("# api + worker in one terminal (ctrl+c stops both)", "dim")}`);
+  console.log(c("    The API caches token state for 15s; the worker reads BOUNTY_HOOK_ADDRESS at boot.\n", "dim"));
+
   console.log(c("Etherscan links:", "dim"));
   console.log(`    Token   https://etherscan.io/address/${post.BOUNTY_TOKEN_ADDRESS}`);
   console.log(`    Core    https://etherscan.io/address/${post.BOUNTY_HOOK_ADDRESS}`);
   console.log(`    Hook    https://etherscan.io/address/${post.REAL_V4_HOOK_ADDRESS}`);
   console.log(`    Policy  https://etherscan.io/address/${post.POLICY_ADDRESS}\n`);
+
+  console.log(c("To remove liquidity later:", "dim"));
+  console.log(c("    npm run remove                   # auto-detects your most recent position", "dim"));
+  console.log(c("    npm run remove -- --tokenId N    # explicit", "dim"));
+  console.log("");
 }
 
 main();

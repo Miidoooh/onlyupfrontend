@@ -12,6 +12,8 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createPublicClient, http } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..");
@@ -38,6 +40,8 @@ const scriptFile = process.argv[2] ?? "DeployFreshNativeEthLaunch.s.sol";
 
 const v4Fee = readEnvFile("V4_FEE") ?? "3000";
 const v4TickSpacing = readEnvFile("V4_TICK_SPACING") ?? "60";
+const rpcHttpUrl = readEnvFile("RPC_HTTP_URL") ?? process.env.RPC_HTTP_URL ?? "";
+const privateKeyRaw = readEnvFile("PRIVATE_KEY") ?? process.env.PRIVATE_KEY ?? "";
 
 const broadcastPath = path.join(
   repoRoot,
@@ -93,8 +97,24 @@ const updates = {
   NEXT_PUBLIC_REAL_V4_HOOK_ADDRESS: deployed.BountyV4Hook,
   NEXT_PUBLIC_BOUNTY_HOOK_ADDRESS: deployed.BountyHookCore,
   POOL_ID: "",
-  LEGACY_POOL_ID: ""
+  LEGACY_POOL_ID: "",
+  REMOVE_MULTIPLIER: "10"
 };
+
+const existingRemoveTokenId = readEnvFile("REMOVE_TOKEN_ID") ?? "";
+const detectedRemoveTokenId = await detectLatestOwnedPositionTokenId({
+  chainId,
+  rpcHttpUrl,
+  privateKey: privateKeyRaw,
+  positionManager:
+    readEnvFile("V4_POSITION_MANAGER") ??
+    (chainId === "1"
+      ? "0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e"
+      : chainId === "11155111"
+        ? "0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4"
+        : "")
+});
+updates.REMOVE_TOKEN_ID = detectedRemoveTokenId || existingRemoveTokenId || "";
 
 if (firstBlock > 0) {
   updates.WORKER_START_BLOCK = String(Math.max(0, firstBlock - 5));
@@ -126,6 +146,11 @@ for (const [k, v] of Object.entries(updates)) {
   console.log(`  ${k}=${v}`);
 }
 
+if (!updates.REMOVE_TOKEN_ID) {
+  console.log("  REMOVE_TOKEN_ID is blank (no owned Position NFT detected yet).");
+  console.log("  After you add liquidity, set/remove via .env or rerun launch sync.");
+}
+
 const checkpoint = path.join(repoRoot, "apps", "worker", ".checkpoint");
 if (fs.existsSync(checkpoint)) {
   fs.unlinkSync(checkpoint);
@@ -151,3 +176,52 @@ Next:
        npm run dev:web
        npm run doctor
 `);
+
+async function detectLatestOwnedPositionTokenId({ chainId, rpcHttpUrl, privateKey, positionManager }) {
+  if (!chainId || !rpcHttpUrl || !privateKey || !positionManager) return "";
+  const key = privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
+  if (!/^0x[0-9a-fA-F]{64}$/.test(key)) return "";
+  if (!/^0x[0-9a-fA-F]{40}$/.test(positionManager)) return "";
+
+  const account = privateKeyToAccount(key);
+  const client = createPublicClient({
+    chain: { id: Number(chainId), name: `chain-${chainId}`, nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [rpcHttpUrl] } } },
+    transport: http(rpcHttpUrl)
+  });
+
+  const erc721EnumerableAbi = [
+    {
+      name: "balanceOf",
+      type: "function",
+      stateMutability: "view",
+      inputs: [{ name: "owner", type: "address" }],
+      outputs: [{ name: "", type: "uint256" }]
+    },
+    {
+      name: "tokenOfOwnerByIndex",
+      type: "function",
+      stateMutability: "view",
+      inputs: [{ name: "owner", type: "address" }, { name: "index", type: "uint256" }],
+      outputs: [{ name: "", type: "uint256" }]
+    }
+  ];
+
+  try {
+    const owned = await client.readContract({
+      address: positionManager,
+      abi: erc721EnumerableAbi,
+      functionName: "balanceOf",
+      args: [account.address]
+    });
+    if (!owned || owned <= 0n) return "";
+    const tokenId = await client.readContract({
+      address: positionManager,
+      abi: erc721EnumerableAbi,
+      functionName: "tokenOfOwnerByIndex",
+      args: [account.address, owned - 1n]
+    });
+    return tokenId?.toString?.() ?? "";
+  } catch {
+    return "";
+  }
+}

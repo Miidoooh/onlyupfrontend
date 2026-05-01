@@ -15,10 +15,13 @@
     "dev:web": "npm run dev -w @bounty/web",
     "dev:api": "npm run dev -w @bounty/api",
     "dev:worker": "npm run dev -w @bounty/worker",
+    "dev:all": "node scripts/dev/dev-all.mjs",
+    "dev:all:tunnel": "node scripts/dev/dev-all.mjs --tunnel",
     "simulate:v4": "tsx apps/worker/src/simulate-v4-flow.ts",
     "contracts:build": "forge build --root contracts",
     "contracts:test": "forge test --root contracts",
     "launch": "node scripts/deploy/launch.mjs",
+    "launch:fresh": "node scripts/deploy/launch.mjs --fresh",
     "launch:wire-pool": "node scripts/deploy/post-deploy.mjs",
     "vercel:sync": "node scripts/deploy/sync-vercel-env.mjs",
     "deploy": "node scripts/deploy/run-deploy.mjs",
@@ -40,7 +43,8 @@
     "doctor": "tsx scripts/loadtest/doctor.ts",
     "find-pool": "node scripts/find-pool.mjs",
     "check-quote": "node scripts/check-quote.mjs",
-    "loadtest:wired": "tsx scripts/loadtest-wired.ts"
+    "loadtest:wired": "tsx scripts/loadtest-wired.ts",
+    "remove": "node scripts/deploy/remove-liquidity.mjs"
   },
   "engines": {
     "node": ">=20.11.0",
@@ -49,6 +53,7 @@
   "devDependencies": {
     "@openzeppelin/contracts": "^5.6.1",
     "@types/node": "^20.12.12",
+    "@uniswap/permit2": "github:Uniswap/permit2",
     "@uniswap/v4-core": "^1.0.2",
     "@uniswap/v4-periphery": "^1.0.3",
     "eslint": "^8.57.0",

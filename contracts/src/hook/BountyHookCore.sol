@@ -128,6 +128,11 @@ contract BountyHookCore {
         emit PoolConfigured(poolId, bountyToken, quoteToken, enabled);
     }
 
+    /// @notice Legacy single-entry reporter API. Pulls bounty via `transferFrom(seller)`
+    ///         and only works when the seller has approved this contract — i.e.
+    ///         direct EOA reporting and unit tests. Production swaps go through
+    ///         {recordSell}/{recordBuy} which assume the v4 hook has already
+    ///         skimmed and forwarded the bounty natively (no allowance needed).
     function reportSwap(
         bytes32 poolId,
         address trader,
@@ -144,10 +149,72 @@ contract BountyHookCore {
         emit BountyPressureUpdated(poolId, sells, buys, bountyBps);
 
         if (side == SwapSide.Sell) {
-            return _handleSell(poolId, trader, bountyToken, quoteToken, amountIn, bountyBps);
+            return _handleSellLegacy(poolId, trader, bountyToken, quoteToken, amountIn, bountyBps);
         }
 
         return _handleBuy(poolId, trader, amountIn);
+    }
+
+    /// @notice v4-native sell entry. The v4 hook skims `bountyAmount` of
+    ///         `bountyToken` from the swap input via `BeforeSwapDelta` +
+    ///         `poolManager.take`, transfers it to this contract, then calls
+    ///         this method. No allowance from the seller is required.
+    /// @dev Caller MUST be the configured reporter (the v4 hook) AND have
+    ///      already transferred `bountyAmount` bountyToken to this contract.
+    function recordSell(
+        bytes32 poolId,
+        address seller,
+        address bountyToken,
+        address quoteToken,
+        uint256 sellAmount,
+        uint256 bountyAmount
+    ) external onlyReporter nonReentrant returns (bytes32 windowId) {
+        _validatePool(poolId, bountyToken, quoteToken);
+        if (seller == address(0)) revert InvalidAddress();
+
+        pressurePolicy.recordFlow(poolId, true, sellAmount);
+        (uint256 sells, uint256 buys, uint16 bountyBps) = pressurePolicy.pressure(poolId);
+        emit BountyPressureUpdated(poolId, sells, buys, bountyBps);
+
+        if (sellAmount < minDumpAmount || bountyAmount == 0) return bytes32(0);
+
+        windowId = activeWindowByPool[poolId];
+        BountyWindow storage window = windows[windowId];
+
+        if (window.startBlock == 0 || block.number > window.endBlock || window.finalized) {
+            windowId = keccak256(abi.encode(poolId, block.number, seller, bountyAmount, bountyBps));
+            activeWindowByPool[poolId] = windowId;
+            window = windows[windowId];
+            window.poolId = poolId;
+            window.bountyToken = bountyToken;
+            window.quoteToken = quoteToken;
+            window.startBlock = uint64(block.number);
+            window.endBlock = uint64(block.number) + bountyWindowBlocks;
+            emit BountyOpened(windowId, poolId, bountyToken, quoteToken, window.startBlock, window.endBlock, bountyAmount);
+        }
+
+        window.totalBounty += bountyAmount;
+        emit BountyFunded(windowId, seller, bountyAmount, sellAmount, bountyBps);
+    }
+
+    /// @notice v4-native buy entry. No funds movement; just records the buy
+    ///         against the active window (if any) so the buyer's qualifying
+    ///         volume grows.
+    function recordBuy(
+        bytes32 poolId,
+        address buyer,
+        address bountyToken,
+        address quoteToken,
+        uint256 buyAmount
+    ) external onlyReporter nonReentrant returns (bytes32 windowId) {
+        _validatePool(poolId, bountyToken, quoteToken);
+        if (buyer == address(0)) revert InvalidAddress();
+
+        pressurePolicy.recordFlow(poolId, false, buyAmount);
+        (uint256 sells, uint256 buys, uint16 bountyBps) = pressurePolicy.pressure(poolId);
+        emit BountyPressureUpdated(poolId, sells, buys, bountyBps);
+
+        return _handleBuy(poolId, buyer, buyAmount);
     }
 
     function claim(bytes32 windowId) external nonReentrant returns (uint256 reward) {
@@ -194,7 +261,10 @@ contract BountyHookCore {
         return buyersByWindow[windowId];
     }
 
-    function _handleSell(
+    /// @dev Legacy path: pulls bounty via `transferFrom(seller)`. Used by
+    ///      `reportSwap`. Production v4 path uses {recordSell} which receives
+    ///      pre-skimmed funds without needing an allowance.
+    function _handleSellLegacy(
         bytes32 poolId,
         address seller,
         address bountyToken,

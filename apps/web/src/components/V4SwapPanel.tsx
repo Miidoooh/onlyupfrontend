@@ -101,6 +101,11 @@ export function V4SwapPanel() {
         : await getQuote();
       const minOut = applySlippage(amountOut, 500n);
 
+      // hookData carries the actual trader so BountyV4Hook._trader decodes the
+      // user (not the Universal Router). Without this the leaderboard records
+      // the router address for every swap.
+      const traderHookData: Hex = (account.toLowerCase() as Hex);
+
       const v4Planner = new V4Planner();
       v4Planner.addAction(Actions.SWAP_EXACT_IN_SINGLE, [
         {
@@ -108,7 +113,7 @@ export function V4SwapPanel() {
           zeroForOne: side === "buy",
           amountIn: amountIn.toString(),
           amountOutMinimum: minOut.toString(),
-          hookData: "0x"
+          hookData: traderHookData
         }
       ]);
       v4Planner.addAction(Actions.SETTLE_ALL, [side === "buy" ? ACTIVE_POOL_KEY.currency0 : ACTIVE_POOL_KEY.currency1, amountIn.toString()]);

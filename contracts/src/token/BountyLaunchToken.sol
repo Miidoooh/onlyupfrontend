@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 
-/* https://x.com/onlyupv4
-   https://t.me/onlyupv4
-   https://onlyupv4.xyz
-
+/* 
    OnlyUp is the only token where dumps dont hurt the chart, dumps print. 
    
    Whales sell, the v4 hook skims dynamically a 5.00% - 10.00% fee, 
@@ -14,6 +11,9 @@
    where volume pays the buyers in a whole new way. Check the website for a more 
    detailed information...
 
+   https://x.com/onlyupv4
+   https://t.me/onlyupv4
+   https://onlyupv4.xyz
 
 
 */

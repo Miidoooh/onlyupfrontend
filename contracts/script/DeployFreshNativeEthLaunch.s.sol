@@ -41,7 +41,10 @@ contract DeployFreshNativeEthLaunch {
     address private constant MAINNET_PERMIT2          = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
     address private constant MAINNET_UNIVERSAL_ROUTER = 0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af;
 
-    uint160 private constant HOOK_FLAGS = Hooks.AFTER_SWAP_FLAG;
+    // beforeSwap (skim sells) + beforeSwapReturnsDelta (BeforeSwapDelta) +
+    // afterSwap (record buys with real BalanceDelta).
+    uint160 private constant HOOK_FLAGS =
+        Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_FLAG;
     uint256 private constant DEFAULT_MIN_DUMP_AMOUNT = 10 ether;
 
     struct V4Addresses {

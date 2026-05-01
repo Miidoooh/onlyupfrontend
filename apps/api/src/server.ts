@@ -2,6 +2,7 @@ import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { bountyEventSchema, type ChainConfig, type HexAddress } from "@bounty/shared";
 import { poolIdOrZero } from "@bounty/shared/env";
+import { readLaunchState } from "./chainReader.js";
 import { demoEvents } from "./fixtures.js";
 import { jsonBigInt } from "./serialization.js";
 import { BountyReadStore } from "./store.js";
@@ -57,20 +58,35 @@ export async function buildServer(options: ServerOptions) {
   app.get<{ Params: { poolId: `0x${string}` } }>("/pressure/:poolId", async (request) =>
     jsonBigInt(store.getPressure(request.params.poolId))
   );
-  app.get("/launch", async () =>
-    jsonBigInt(
-      store.getLaunchInfo({
-        name: "Only Up",
-        symbol: "UP",
-        totalSupply: 1_000_000_000_000_000_000_000_000_000n,
-        maxTxAmount: 10_000_000_000_000_000_000_000_000n,
-        maxWalletAmount: 10_000_000_000_000_000_000_000_000n,
-        hookAddress: options.chainConfig.bountyHookAddress,
-        tokenAddress: options.tokenAddress,
-        poolId: poolIdOrZero(options.chainConfig.poolId)
-      })
-    )
-  );
+  app.get("/launch", async () => {
+    const fallback = {
+      name: "Only Up",
+      symbol: "UP",
+      totalSupply: 1_000_000_000_000_000_000_000_000_000n,
+      maxTxAmount: 10_000_000_000_000_000_000_000_000n,
+      maxWalletAmount: 10_000_000_000_000_000_000_000_000n,
+      tradingEnabled: false,
+      launchLimitsEnabled: true
+    };
+
+    let onChain: Awaited<ReturnType<typeof readLaunchState>> | undefined;
+    if (options.tokenAddress && options.chainConfig.rpcHttpUrl) {
+      onChain = await readLaunchState(options.chainConfig.rpcHttpUrl, options.tokenAddress);
+    }
+
+    return jsonBigInt({
+      name: onChain?.name || fallback.name,
+      symbol: onChain?.symbol || fallback.symbol,
+      totalSupply: onChain?.totalSupply ?? fallback.totalSupply,
+      maxTxAmount: onChain?.maxTxAmount ?? fallback.maxTxAmount,
+      maxWalletAmount: onChain?.maxWalletAmount ?? fallback.maxWalletAmount,
+      tradingEnabled: onChain?.tradingEnabled ?? fallback.tradingEnabled,
+      launchLimitsEnabled: onChain?.launchLimitsEnabled ?? fallback.launchLimitsEnabled,
+      hookAddress: options.chainConfig.bountyHookAddress,
+      tokenAddress: options.tokenAddress,
+      poolId: poolIdOrZero(options.chainConfig.poolId)
+    });
+  });
   app.get("/bot/health", async () =>
     store.getBotHealth({
       apiIngestProtected: Boolean(options.workerSecret),

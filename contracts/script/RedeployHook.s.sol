@@ -44,7 +44,10 @@ contract RedeployHook {
     address private constant MAINNET_POOL_MANAGER = 0x000000000004444c5dc75cB358380D2e3dE08A90;
     address private constant SEPOLIA_POOL_MANAGER = 0xE03A1074c86CFeDd5C142C4F04F1a1536e203543;
 
-    uint160 private constant HOOK_FLAGS = Hooks.AFTER_SWAP_FLAG;
+    // beforeSwap (skim sells) + beforeSwapReturnsDelta (BeforeSwapDelta) +
+    // afterSwap (record buys with real BalanceDelta).
+    uint160 private constant HOOK_FLAGS =
+        Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG | Hooks.AFTER_SWAP_FLAG;
 
     event HookRedeployed(
         address indexed newHook,

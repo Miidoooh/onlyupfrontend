@@ -183,17 +183,21 @@ if (!sync.changed) {
 
 console.log(`
 ══════════════════════════════════════════════════════════════
-  IF YOUR WORKER IS RUNNING — restart it so it picks up the
-  cleared checkpoint and re-scans from WORKER_START_BLOCK:
+  RESTART local services so they pick up the new addresses
+  + cleared checkpoint:
 
-    Ctrl+C the dev:worker terminal, then:
-      npm run dev:worker
+    Ctrl+C the running terminal(s), then:
+      npm run dev:all          # api + worker in one terminal
 
 ══════════════════════════════════════════════════════════════
 
 ✓ Post-deploy complete.
 
   Make a sell of ≥ 10 UP on the pool. Within ~12s you should see
-  BountyOpened + BountyFunded in /events and the dashboard.
+  BountyOpened + BountyFunded in /events and on the dashboard.
   Buys made during the next 50 blocks split that bounty.
+
+  The hook now skims natively via BeforeSwapDelta — no allowance
+  needed from the seller, so router-mediated swaps (Uniswap UI,
+  aggregators) all fire bounty events correctly.
 `);
